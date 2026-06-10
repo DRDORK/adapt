@@ -204,7 +204,7 @@
       <div class="seclbl">Focus Music</div>
       <div class="card">
         <div class="rw"><span class="lbl"><span class="ico"><svg viewBox="0 0 24 24" width="21" height="21"><rect x="3" y="10" width="3" height="5" rx="1.5" fill="#2f5d2c"/><rect x="8" y="5" width="3" height="10" rx="1.5" fill="#F5C242"/><rect x="13" y="8" width="3" height="7" rx="1.5" fill="#2f5d2c"/><rect x="18" y="3" width="3" height="12" rx="1.5" fill="#2f5d2c"/></svg></span>Adaptive Focus Music<span class="prempill" id="premiumPill">PREMIUM</span></span><span class="tg" id="adaptiveToggle" data-toggle></span></div>
-        <div class="rw" id="soundPickRow" style="cursor:pointer"><span class="lbl" style="font-weight:500;color:var(--ink)">Style</span><span class="val"><span id="styleVal">Lo-fi</span> <span class="chev">›</span></span></div>
+        <div class="rw" id="soundPickRow" style="cursor:pointer"><span class="lbl" style="font-weight:500;color:var(--ink)">Style</span><span class="val"><span id="styleVal">Ambient</span> <span class="chev">›</span></span></div>
       </div>
       <div class="cap" id="adaptiveCap">Personalized music that keeps you in flow, building and easing across your whole session.</div>
 
@@ -318,7 +318,7 @@
    <summary>⚙ Demo controls</summary>
    <div class="h">Music is generated on-device by Freedom's adaptive engine (Web Audio) — nothing to configure, no stream URL needed.</div>
    <label><input type="checkbox" id="freeUser" checked> Simulate a free (non-Premium) user — toggling Adaptive Focus Music on fires the paywall. Uncheck to act as Premium.</label>
-   <label><input type="checkbox" id="demoFast" checked> Run the session in ~30s so the intensity arc is visible on stage (otherwise uses the selected length).</label>
+   <label><input type="checkbox" id="demoFast" checked> Run the session in 5 minutes so the full arc is audible (otherwise uses the selected length).</label>
    <label><input type="checkbox" id="blockAll"> Simulate a "block all internet" session — the music keeps playing (it's on-device); shows the explainer once.</label>
  </details>
 
@@ -330,7 +330,7 @@ const STYLES=[
   {key:'ambient', name:'Ambient',    desc:'weightless pads and slow bells — pure stillness'},
   {key:'lofi',    name:'Lo-fi',      desc:'tape-warm plucks over a soft beat'},
   {key:'pulse',   name:'Pulse',      desc:'a soft synth pulse for steady momentum'},
-  {key:'rain',    name:'Night Rain', desc:'distant weather and the occasional bell'},
+  {key:'rain',    name:'Night Rain', desc:'rain, soft plucks, distant windchimes'},
 ];
 let currentStyle=STYLES[0];
 
@@ -347,37 +347,38 @@ const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
 const Engine=(()=>{ 
   let ctx=null, master, filter, dryG, wetG, conv;
   let wowDelay, wowLFO, wowDepth, cleanG, satPre, satShaper, satTone, satG, lofiBus, hissG;
-  let rainG=null, drumG=null;
-  let running=false, noteTimer=null, arpTimer=null, drumTimer=null, droneNodes=[], fifthG=null, CH=null;
-  let resolveBias=1, sounding=[], fadingOut=false;
+  let rainG=null, rainHiG=null, rainGustG=null, drumG=null, chimeG=null;
+  let running=false, noteTimer=null, arpTimer=null, drumTimer=null, chimeTimer=null, chordTimer=null, droneNodes=[], fifthG=null, CH=null;
+  let resolveBias=1, sounding=[], fadingOut=false, chordTones=null, chordIdx=0, phaseIx=0, arcPos=0, curStage='', curSet=null;
   let P={bright:.4, dens:.3, space:.8, lofi:.2};
 
   const ROOT=73.42; // D2
-  const SCALES={dark:[0,3,5,7,10], warm:[0,2,4,7,9], bright:[0,2,4,7,9,11]};
+  const SCALES={warm:[0,2,4,7,9], bright:[0,2,4,7,9,11]}; // major pentatonic core; maj7 color at the top — no minor anywhere
   const rand=(a,b)=>a+Math.random()*(b-a);
   const pick=a=>a[Math.floor(Math.random()*a.length)];
   const lerp=(a,b,t)=>a+(b-a)*t;
+  const driveAmt=()=>arcPos>=.85?(arcPos-.85)/.15:0; // the last climb, any channel
 
   // Channel recipes. mix = [pad, bell, pluck] spawn weights.
   // space is INVERSE to intensity: wide at the bookends, close in the deep middle.
-  // lofi follows the curve: dustier at the edges, cleaner at the peak.
+  // lofi follows the curve directly: cleaner at the edges, dustier at the peak.
   const CHANNELS={
-    ambient:{mix:[.58,.20,.22], arp:false, rain:false, drone:'sawtooth',
+    ambient:{mix:[.58,.20,.22], arp:false, rain:false, chords:'harp', chordEvery:16, chordDelay:3, drone:'sawtooth',
       brightLo:.30, brightHi:1.00, densLo:.10, densHi:.95,
-      spaceFar:.85, spaceNear:.45, lofiEdge:.30, lofiPeak:.10,
+      spaceFar:.85, spaceNear:.45, lofiStart:.10, lofiPeak:.30,
       intLo:1.4, intHi:7, vol:.75},
-    lofi:{mix:[.40,.08,.52], arp:false, drums:true, dbpm:74, rain:false, drone:'triangle',
+    lofi:{mix:[.55,.15,.30], arp:false, drums:true, dbpm:74, beatPlucks:true, rain:false, chords:'ep', chordEvery:6.5, chordDelay:25, drone:'triangle', droneLevel:.03, droneFifth:.45,
       brightLo:.18, brightHi:.72, densLo:.15, densHi:1.00,
-      spaceFar:.55, spaceNear:.28, lofiEdge:.85, lofiPeak:.55,
+      spaceFar:.55, spaceNear:.28, lofiStart:.38, lofiPeak:.58,
       intLo:1.1, intHi:5, vol:.8},
-    pulse:{mix:[.60,.15,.25], arp:true, bpm:72, rain:false, drone:'sawtooth',
+    pulse:{mix:[.60,.15,.25], arp:true, bpm:72, beatPlucks:true, rain:false, drone:'sawtooth',
       brightLo:.35, brightHi:1.00, densLo:.05, densHi:.55,
-      spaceFar:.70, spaceNear:.35, lofiEdge:.25, lofiPeak:.08,
+      spaceFar:.70, spaceNear:.35, lofiStart:.08, lofiPeak:.25,
       intLo:2.5, intHi:9, vol:.7},
-    rain:{mix:[.45,.35,.20], arp:false, rain:true, drone:'triangle',
-      brightLo:.25, brightHi:.80, densLo:.05, densHi:.45,
-      spaceFar:.90, spaceNear:.55, lofiEdge:.20, lofiPeak:.10,
-      intLo:4, intHi:14, vol:.75},
+    rain:{mix:[0,0,1], arp:false, rain:true, chimes:true, drone:'none', pluckSoft:true,
+      brightLo:.25, brightHi:.70, densLo:.08, densHi:.50,
+      spaceFar:.90, spaceNear:.55, lofiStart:.10, lofiPeak:.20,
+      intLo:2.2, intHi:8, vol:.75},
   };
 
   function makeSatCurve(k){const n=1024,c=new Float32Array(n);
@@ -417,32 +418,55 @@ const Engine=(()=>{
     const hs=ctx.createBufferSource(); hs.buffer=makeDarkNoise(8,250,.5); hs.loop=true;
     hs.connect(hissG); hissG.connect(lofiBus); hs.start();
 
-    // rain bed: brighter, slower-undulating noise, used by the rain channel only
+    // rain stack (rain channel only): thin and alive.
+    // Three layers on incommensurate LFO rates so the weather never repeats.
+    // 1. low bed — kept very light so the rain reads thin, not rumbly
     rainG=ctx.createGain(); rainG.gain.value=0;
-    const rs=ctx.createBufferSource(); rs.buffer=makeDarkNoise(12,900,.4); rs.loop=true;
-    const rlfo=ctx.createOscillator(); rlfo.frequency.value=.07;
-    const rdep=ctx.createGain(); rdep.gain.value=.012;
+    const rs=ctx.createBufferSource(); rs.buffer=makeDarkNoise(12,700,.4); rs.loop=true;
+    const rlfo=ctx.createOscillator(); rlfo.frequency.value=.05;
+    const rdep=ctx.createGain(); rdep.gain.value=.015;
     rlfo.connect(rdep); rdep.connect(rainG.gain); rlfo.start();
     rs.connect(rainG); rainG.connect(dryG); rs.start();
+    // 2. patter — the main rain body, breathing noticeably
+    rainHiG=ctx.createGain(); rainHiG.gain.value=0;
+    const rp=ctx.createBufferSource(); rp.buffer=makeDarkNoise(10,3200,.35); rp.loop=true;
+    const plfo=ctx.createOscillator(); plfo.frequency.value=.13;
+    const pdep=ctx.createGain(); pdep.gain.value=.022;
+    plfo.connect(pdep); pdep.connect(rainHiG.gain); plfo.start();
+    rp.connect(rainHiG); rainHiG.connect(dryG); rp.start();
+    // 3. gusts — a band of rain whose spectral center slowly sweeps (wind shifting the downpour)
+    rainGustG=ctx.createGain(); rainGustG.gain.value=0;
+    const rg=ctx.createBufferSource(); rg.buffer=makeDarkNoise(14,6000,.35); rg.loop=true;
+    const gbp=ctx.createBiquadFilter(); gbp.type='bandpass'; gbp.frequency.value=2200; gbp.Q.value=.9;
+    const sweep=ctx.createOscillator(); sweep.frequency.value=.045;
+    const sdep=ctx.createGain(); sdep.gain.value=1200;
+    sweep.connect(sdep); sdep.connect(gbp.frequency); sweep.start();
+    const glfo=ctx.createOscillator(); glfo.frequency.value=.11;
+    const gdep=ctx.createGain(); gdep.gain.value=.018;
+    glfo.connect(gdep); gdep.connect(rainGustG.gain); glfo.start();
+    rg.connect(gbp); gbp.connect(rainGustG); rainGustG.connect(dryG); rg.start();
 
     // drum bus: post-mood-filter so the kit keeps its shape, but through the
     // tape stage so it glues to the plucks
     drumG=ctx.createGain(); drumG.gain.value=1; drumG.connect(wowDelay);
+
+    chimeG=ctx.createGain(); chimeG.gain.value=1; chimeG.connect(lofiBus);
 
     lofiBus.connect(dryG); lofiBus.connect(conv); conv.connect(wetG);
     dryG.connect(master); wetG.connect(master);
     master.connect(ctx.destination);
   }
 
-  const scale=()=>P.bright<.35?SCALES.dark:(P.bright<.70?SCALES.warm:SCALES.bright);
+  const scale=()=>P.bright<.70?SCALES.warm:SCALES.bright;
   function clashes(pc){const now=ctx.currentTime;
     sounding=sounding.filter(s=>s.until>now);
+    if(droneNodes.length&&(pc===1||pc===11))return true; // never SUSTAIN a 2nd/maj7 against the drone
     return sounding.some(s=>{const d=Math.abs(s.pc-pc)%12,iv=Math.min(d,12-d);return iv===1||iv===6;});}
   function panTo(node){if(ctx.createStereoPanner){const p=ctx.createStereoPanner();p.pan.value=rand(-.8,.8);node.connect(p);p.connect(filter);}else node.connect(filter);}
 
   function spawnPad(freq,oct,now){
     const attack=rand(2.5,6),sus=rand(2,6),rel=rand(5,12);
-    const peak=rand(.04,.10)*(oct>=3?.5:1);
+    const peak=rand(.04,.10)*(oct>=3?.5:1)*(1+.15*driveAmt());
     const o=ctx.createOscillator(); o.type=Math.random()<.5?'sine':'triangle';
     o.frequency.value=freq; o.detune.value=rand(-3,3);
     o.detune.linearRampToValueAtTime(rand(-4,4),now+attack+sus+rel);
@@ -452,7 +476,7 @@ const Engine=(()=>{
     g.gain.setValueAtTime(peak,now+attack+sus);
     g.gain.linearRampToValueAtTime(0,now+attack+sus+rel);
     o.connect(g); panTo(g); o.start(now); o.stop(now+attack+sus+rel+.1);
-    if(Math.random()<.18+P.bright*.2){
+    if(Math.random()<.18+P.bright*.2+.25*driveAmt()){
       const s=ctx.createOscillator(); s.type='sine';
       s.frequency.value=freq*Math.pow(2,19/12);
       const sg=ctx.createGain(); sg.gain.setValueAtTime(0,now);
@@ -466,7 +490,7 @@ const Engine=(()=>{
     const dur=rand(6,12),peak=rand(.04,.08);
     const c=ctx.createOscillator(); c.type='sine'; c.frequency.value=freq;
     const m=ctx.createOscillator(); m.type='sine';
-    m.frequency.value=freq*pick(P.bright>.5?[2,3,4]:[2,2.76,3.5]);
+    m.frequency.value=freq*pick([2,3,4]); // harmonic only — warm chime, not gamelan
     const mg=ctx.createGain();
     mg.gain.setValueAtTime(freq*rand(1.5,4),now);
     mg.gain.exponentialRampToValueAtTime(freq*.01,now+dur);
@@ -477,7 +501,7 @@ const Engine=(()=>{
     c.connect(g); panTo(g); c.start(now); m.start(now); c.stop(now+dur+.1); m.stop(now+dur+.1);
     return dur;
   }
-  function spawnPluck(freq,now){
+  function spawnPluck(freq,now,velScale=1){
     const dur=3.5,sr=ctx.sampleRate,len=Math.floor(sr*dur);
     const buf=ctx.createBuffer(1,len,sr),d=buf.getChannelData(0);
     const N=Math.max(2,Math.round(sr/freq)),line=new Float32Array(N);
@@ -488,7 +512,7 @@ const Engine=(()=>{
     for(let i=0;i<len;i++){const nx=(idx+1)%N;line[idx]=.5*(line[idx]+line[nx])*.996;d[i]=line[idx];idx=nx;}
     const src=ctx.createBufferSource(); src.buffer=buf;
     src.playbackRate.value=freq*(N+.5)/sr;
-    const g=ctx.createGain(); const peak=rand(.14,.28);
+    const g=ctx.createGain(); const peak=(CH.pluckSoft?rand(.08,.16):rand(.14,.28))*velScale;
     g.gain.setValueAtTime(0,now); g.gain.linearRampToValueAtTime(peak,now+.012);
     src.connect(g); panTo(g); src.start(now);
     return 2.5;
@@ -499,14 +523,15 @@ const Engine=(()=>{
     const oct=pick(P.bright>.6?[1,2,2,3]:[0,1,1,2]);
     const now=ctx.currentTime;
     let semis=pick(sc);
+    if(chordTones&&Math.random()<.55)semis=pick(chordTones); // lean into the current chord
     if(semis===0&&Math.random()>resolveBias)semis=pick(sc.filter(x=>x!==0));
     else if(resolveBias>1&&Math.random()<.35)semis=0;
     for(let i=0;i<8&&clashes(semis);i++)semis=pick(sc);
     if(clashes(semis))return;
     const freq=ROOT*Math.pow(2,oct+semis/12);
-    const r=Math.random(),[wPad,wBell]=CH.mix;
+    const r=Math.random(),[wPad,wBell]=CH.mix,d=driveAmt();
     let dur;
-    if(r<wPad)dur=spawnPad(freq,oct,now);
+    if(r<wPad-.10*d)dur=spawnPad(freq,oct,now);          // at full drive, bells take a slice of the pad share
     else if(r<wPad+wBell)dur=spawnBell(freq*2,now);
     else dur=spawnPluck(freq*2,now);
     sounding.push({pc:semis,until:now+dur*.8});
@@ -528,12 +553,13 @@ const Engine=(()=>{
       let semis=pick(sc);
       if(semis===0&&Math.random()>resolveBias)semis=pick(sc.filter(x=>x!==0));
       const f=ROOT*Math.pow(2,pick([1,2,2,3])+semis/12);
-      const now=ctx.currentTime+(step%2?.025:0); // light swing
+      const now=ctx.currentTime; // straight groove
       const o=ctx.createOscillator(); o.type='triangle'; o.frequency.value=f;
       const g=ctx.createGain(); g.gain.setValueAtTime(0,now);
       g.gain.linearRampToValueAtTime(.05,now+.012);
       g.gain.exponentialRampToValueAtTime(.0001,now+.25+.2*(1-P.dens));
       o.connect(g); g.connect(filter); o.start(now); o.stop(now+.7);
+      if(CH.beatPlucks&&Math.random()<.10+.12*P.dens)spawnGridPluck(now); // plucks land on the arp grid
     },stepMs);
   }
   function drumHit(type,vel,when){
@@ -559,7 +585,7 @@ const Engine=(()=>{
       s.connect(bp); bp.connect(lp); lp.connect(g); g.connect(drumG);
       body.connect(bg); bg.connect(drumG);
       s.start(when); body.start(when); body.stop(when+.15);
-    } else { // shaker-soft hat
+    } else if(type==='hat'){
       const len=Math.floor(ctx.sampleRate*.06), b=ctx.createBuffer(1,len,ctx.sampleRate), d=b.getChannelData(0);
       for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,1.5);
       const s=ctx.createBufferSource(); s.buffer=b;
@@ -568,33 +594,224 @@ const Engine=(()=>{
       const g=ctx.createGain(); g.gain.setValueAtTime(.028*vel,when);
       s.connect(hp); hp.connect(lp); lp.connect(g); g.connect(drumG);
       s.start(when);
+    } else if(type==='shaker'){ // breathier than the hat: mid-band, soft attack
+      const len=Math.floor(ctx.sampleRate*.09), b=ctx.createBuffer(1,len,ctx.sampleRate), d=b.getChannelData(0);
+      for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,1.2);
+      const s=ctx.createBufferSource(); s.buffer=b;
+      const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=4500; bp.Q.value=1;
+      const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=7500;
+      const g=ctx.createGain(); g.gain.setValueAtTime(0,when);
+      g.gain.linearRampToValueAtTime(.022*vel,when+.02);
+      g.gain.exponentialRampToValueAtTime(.0001,when+.10);
+      s.connect(bp); bp.connect(lp); lp.connect(g); g.connect(drumG);
+      s.start(when);
+    } else if(type==='bongoH'||type==='bongoL'){ // soft hand drum, tuned to the key
+      const f=type==='bongoH'?293.66:220; // D4 / A3
+      const o=ctx.createOscillator(); o.type='sine';
+      o.frequency.setValueAtTime(f*1.06,when);
+      o.frequency.exponentialRampToValueAtTime(f,when+.05);
+      const g=ctx.createGain(); g.gain.setValueAtTime(0,when);
+      g.gain.linearRampToValueAtTime(.055*vel,when+.004);
+      g.gain.exponentialRampToValueAtTime(.0001,when+.14);
+      o.connect(g); g.connect(drumG); o.start(when); o.stop(when+.2);
+    } else if(type==='ride'){ // brushed cymbal swell — no attack at all
+      const len=Math.floor(ctx.sampleRate*.6), b=ctx.createBuffer(1,len,ctx.sampleRate), d=b.getChannelData(0);
+      for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,1.3);
+      const s=ctx.createBufferSource(); s.buffer=b;
+      const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=2500;
+      const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=6000;
+      const g=ctx.createGain(); g.gain.setValueAtTime(0,when);
+      g.gain.linearRampToValueAtTime(.018*vel,when+.06);
+      g.gain.exponentialRampToValueAtTime(.0001,when+.55);
+      s.connect(hp); hp.connect(lp); lp.connect(g); g.connect(drumG);
+      s.start(when);
     }
+  }
+  function spawnGridPluck(when){
+    const sc=scale();
+    let semis=pick(sc);
+    if(chordTones&&Math.random()<.6)semis=pick(chordTones);
+    if(semis===0&&Math.random()>resolveBias)semis=pick(sc.filter(x=>x!==0));
+    for(let i=0;i<8&&clashes(semis);i++)semis=pick(sc);
+    if(clashes(semis))return;
+    const freq=ROOT*Math.pow(2,pick([1,2,2,3])+semis/12);
+    spawnPluck(freq*2,when,rand(.6,.95));
+    sounding.push({pc:semis,until:when+2});
   }
   function startDrums(){
     if(!CH.drums)return;
     const stepMs=60000/CH.dbpm/4; // 16th-note grid
-    const KICK =[1,0,0,0, 0,0,0,1, 0,0,1,0, 0,0,0,0];
+    const KICKS=[
+      [1,0,0,0, 0,0,0,1, 0,0,1,0, 0,0,0,0],
+      [1,0,0,0, 0,0,1,0, 0,0,1,0, 0,1,0,0],
+      [1,0,0,1, 0,0,0,0, 0,1,0,0, 0,0,1,0],
+    ];
+    const HATS=[
+      [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0],
+      [1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0],
+      [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,1],
+    ];
     const SNARE=[0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
-    const HAT  =[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1];
-    let step=0;
+    const SHAKER=[0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,0,1];
+    const BONGO_H=[
+      [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,0,1,0],
+      [0,0,1,0, 0,0,0,0, 0,0,1,0, 0,0,0,1],
+    ];
+    const BONGO_L=[
+      [0,0,0,1, 0,0,0,0, 0,0,1,0, 0,0,0,0],
+      [0,0,0,0, 0,1,0,0, 0,0,0,0, 0,1,0,0],
+    ];
+    let step=0, bar=0, kick=KICKS[0], hat=HATS[0], bh=BONGO_H[0], bl=BONGO_L[0];
+    let breakBars=0, percMode='shaker';
     drumTimer=setInterval(()=>{
       if(!running)return;
-      const s=step%16; step++;
-      const swing=(s%2)?stepMs*.00018:0;   // lazy lo-fi swing
-      const when=ctx.currentTime+.02+swing;
-      const level=.35+.65*P.dens;          // kit rides the arc: faint early, fuller at the peak
-      if(level<.45&&s%4!==0)return;        // thin the pattern at very low intensity
-      if(KICK[s])drumHit('kick',level*rand(.85,1.05),when);
-      if(SNARE[s])drumHit('snare',level*rand(.8,1),when);
-      if(HAT[s]&&Math.random()<.85)drumHit('hat',level*rand(.6,1),when);
-      if(s===9&&Math.random()<.25)drumHit('kick',level*.5,when); // ghost note
+      const s=step%16;
+      if(s===0){
+        bar++;
+        if(breakBars>0)breakBars--;
+        if(bar%8===0){            // phrase boundary: re-roll everything
+          kick=pick(KICKS); hat=pick(HATS); bh=pick(BONGO_H); bl=pick(BONGO_L);
+          percMode=pick(['shaker','bongo','both','shaker']);
+          if(Math.random()<.4)breakBars=pick([1,2]);
+        }
+      }
+      step++;
+      const level=.35+.65*P.dens;
+      const when=ctx.currentTime+.02; // straight groove
+      const drive=level>=.85?(level-.85)/.15:0; // the last climb: closer, bigger, driving
+      // six-stage build along the session map:
+      // (silence) -> hats .60 -> shaker .66 -> kick .72 -> bongos .76 -> snare .80 -> ride swells .85
+      const hatsOn  = level>=.60;
+      const shakOn  = level>=.66 && percMode!=='bongo';
+      const kickOn  = level>=.72 && breakBars===0;
+      const bongoOn = level>=.76 && percMode!=='shaker' && breakBars===0;
+      const snareOn = level>=.80 && breakBars===0;
+      const rideOn  = level>=.85;
+      const fill    = (bar%8===7)&&s>=14;
+      if(hatsOn&&hat[s]&&Math.random()<.8+.15*drive)drumHit('hat',level*rand(.5,.95)*(1+.25*drive),when);
+      if(shakOn&&SHAKER[s]&&Math.random()<.7)drumHit('shaker',level*rand(.6,1)*(s%4===2?1.2:.85),when);
+      if(kickOn&&kick[s]&&Math.random()<.92)drumHit('kick',level*rand(.8,1.05)*(1+.3*drive),when);
+      if(drive>0&&kickOn&&!kick[s]&&s%4===0&&Math.random()<drive*.7)drumHit('kick',level*.9,when); // four-on-the-floor reinforcement at peak
+      if(bongoOn&&bh[s]&&Math.random()<.85)drumHit('bongoH',level*rand(.7,1),when);
+      if(bongoOn&&bl[s]&&Math.random()<.85)drumHit('bongoL',level*rand(.7,1),when);
+      if(snareOn&&SNARE[s])drumHit('snare',level*rand(.75,1)*(1+.2*drive),when);
+      if(snareOn&&!SNARE[s]&&Math.random()<.04)drumHit('snare',level*.35,when); // ghost
+      if(rideOn&&s===0&&bar%4===0&&Math.random()<.5+.4*drive)drumHit('ride',level,when);
+      if(fill&&Math.random()<.5)drumHit('kick',level*.45,when);
+      // beat-aligned melodic plucks on 8th positions — most plucks now land on the grid
+      if(CH.beatPlucks&&s%2===0&&Math.random()<.16+.22*P.dens)spawnGridPluck(when);
     },stepMs);
   }
+  function chimeStrike(when,vel){
+    const NOTES=[1174.66,1318.51,1479.98,1760,1975.53]; // D6 E6 F#6 A6 B6 — major pentatonic
+    const f=pick(NOTES);
+    const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=f;
+    const m=ctx.createOscillator(); m.type='sine'; m.frequency.value=f*3;
+    const mg=ctx.createGain(); mg.gain.setValueAtTime(f*.8,when);
+    mg.gain.exponentialRampToValueAtTime(f*.01,when+2.5);
+    m.connect(mg); mg.connect(o.frequency);
+    const g=ctx.createGain(); g.gain.setValueAtTime(0,when);
+    g.gain.linearRampToValueAtTime(.028*vel,when+.01);
+    g.gain.exponentialRampToValueAtTime(.0001,when+rand(3,5.5));
+    if(ctx.createStereoPanner){const p=ctx.createStereoPanner();p.pan.value=rand(-.7,.7);o.connect(g);g.connect(p);p.connect(chimeG);}
+    else{o.connect(g);g.connect(chimeG);}
+    o.start(when); m.start(when); o.stop(when+6); m.stop(when+6);
+  }
+  function startChimes(){
+    if(!CH.chimes)return;
+    (function gust(){
+      if(!running)return;
+      chimeTimer=setTimeout(()=>{
+        if(!running||!CH.chimes)return;
+        // a breeze passes: a loose flurry of 2-5 strikes, then quiet again
+        const n=2+Math.floor(Math.random()*4);
+        let t=ctx.currentTime+.05;
+        for(let k=0;k<n;k++){ chimeStrike(t, rand(.5,1)*(.5+.5*P.dens)); t+=rand(.25,1.8); }
+        gust();
+      }, rand(18,55)*1000*(1.4-.6*P.dens)); // gusts arrive a bit more often as the arc builds
+    })();
+  }
+  // ---- chord engine: a real progression that the melody voices lean into ----
+  // middle phases withhold the home chord (vi-IV-ii-V); the final stretch lifts
+  // into high voicings (the 'a bit triumphant' moment); wind-down lands on I.
+  // ---- staged harmony: I arrives first in inversion, root position only at the peak ----
+  // voicings in semitones above D (bass note first = the inversion)
+  // vi=[9,12,16]  IV=[5,9,12]  IVmaj7=[5,9,12,16]  ii=[2,5,9]  V=[7,11,14]
+  // I6 (1st inv)=[4,7,12]  I64 (2nd inv)=[7,12,16]  I (root)=[0,4,7,12]
+  const CHORD_POOLS={
+    early:[ // no tonic chord at all — pure pull
+      [[9,12,16],[5,9,12],[2,5,9],[7,11,14]],                  // vi IV ii V
+      [[2,5,9],[9,12,16],[5,9,12,16],[7,11,14]],               // ii vi IVmaj7 V
+    ],
+    mid:[ // partial resolutions: I in inversion only
+      [[5,9,12,16],[4,7,12],[9,12,16],[2,5,9]],                // IVmaj7 I6 vi ii
+      [[5,9,12],[7,11,14],[7,12,16],[9,12,16]],                // IV V I64 vi
+      [[9,12,16],[5,9,12,16],[4,7,12],[7,11,14]],              // vi IVmaj7 I6 V
+    ],
+    late:[ // root-position I starts landing
+      [[2,5,9],[7,11,14],[5,9,12,16],[0,4,7,12]],              // ii V IVmaj7 I
+      [[5,9,12],[7,11,14],[7,12,16],[0,4,7,12]],               // IV V I64 I
+    ],
+    final:[ // the lift: high voicings, root tonic owns the cadence
+      [[12,16,19,23],[7,11,14,19],[5,9,12,19],[12,16,19,24]],  // I(maj7) V IV(add9) I — all high
+    ],
+    wind:[ [[0,4,7,12]] ],                                     // home
+  };
+  function chordStage(){
+    if(phaseIx===3)return 'wind';
+    if(phaseIx===2)return 'final';
+    if(arcPos<.45)return 'early';
+    if(arcPos<.70)return 'mid';
+    return 'late';
+  }
+  function harpChord(tones,when,vel){
+    let t=when;
+    tones.forEach(semi=>{ spawnPluck(ROOT*Math.pow(2,semi/12)*2,t,.55*vel); t+=rand(.05,.2); });
+  }
+  function epChord(tones,when,vel){
+    tones.forEach((semi,k)=>{
+      const f=ROOT*Math.pow(2,semi/12)*2;
+      const t=when+k*rand(.015,.04); // tight strum
+      const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=f;
+      const m=ctx.createOscillator(); m.type='sine'; m.frequency.value=f; // 1:1 FM = electric piano
+      const mg=ctx.createGain(); mg.gain.setValueAtTime(f*1.8,t);
+      mg.gain.exponentialRampToValueAtTime(f*.05,t+1.2);
+      m.connect(mg); mg.connect(o.frequency);
+      const g=ctx.createGain(); g.gain.setValueAtTime(0,t);
+      g.gain.linearRampToValueAtTime(.05*vel,t+.012);
+      g.gain.exponentialRampToValueAtTime(.0001,t+rand(2.2,3.2));
+      if(ctx.createStereoPanner){const p=ctx.createStereoPanner();p.pan.value=rand(-.35,.35);o.connect(g);g.connect(p);p.connect(filter);}
+      else{o.connect(g);g.connect(filter);}
+      o.start(t); m.start(t); o.stop(t+3.5); m.stop(t+3.5);
+    });
+  }
+  function playChord(){
+    if(!CH.chords)return;
+    const st=chordStage();
+    if(st!==curStage||!curSet){ curStage=st; curSet=pick(CHORD_POOLS[st]); chordIdx=0; }
+    const tones=curSet[chordIdx%curSet.length];
+    chordIdx++;
+    if(chordIdx%curSet.length===0)curSet=pick(CHORD_POOLS[st]); // new progression each cycle
+    chordTones=tones.map(x=>x%12);
+    const vel=(.6+.4*P.dens)*(phaseIx===2?1.25:1);
+    const when=ctx.currentTime+.05;
+    if(CH.chords==='harp')harpChord(tones,when,vel); else epChord(tones,when,vel);
+  }
+  function startChords(){
+    if(!CH.chords){chordTones=null;return;}
+    setTimeout(()=>{if(running&&CH.chords)playChord();},(CH.chordDelay||3)*1000);
+    (function loop(){
+      if(!running)return;
+      chordTimer=setTimeout(()=>{ if(!running||!CH.chords)return; playChord(); loop(); },
+        CH.chordEvery*1000*rand(.85,1.15));
+    })();
+  }
   function startDrone(){
+    if(CH.drone==='none')return;
     [-4,3].forEach(dt=>{
       const o=ctx.createOscillator(); o.type=CH.drone; o.frequency.value=ROOT/2; o.detune.value=dt;
       const g=ctx.createGain(); g.gain.value=0;
-      g.gain.linearRampToValueAtTime(CH.drone==='sawtooth'?.05:.07,ctx.currentTime+8);
+      g.gain.linearRampToValueAtTime(CH.droneLevel!==undefined?CH.droneLevel:(CH.drone==='sawtooth'?.05:.07),ctx.currentTime+8);
       const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=180;
       const lfo=ctx.createOscillator(); lfo.frequency.value=rand(.02,.05);
       const lg=ctx.createGain(); lg.gain.value=.018;
@@ -630,8 +847,12 @@ const Engine=(()=>{
     satTone.frequency.linearRampToValueAtTime(16000-l*12500,t+1);
     wowDepth.gain.linearRampToValueAtTime(l*.0012,t+1);
     hissG.gain.linearRampToValueAtTime(l<.4?0:Math.pow((l-.4)/.6,2)*.07,t+1);
-    if(fifthG)fifthG.gain.linearRampToValueAtTime(P.bright*.035,t+3);
-    if(rainG)rainG.gain.linearRampToValueAtTime(CH&&CH.rain?(.05+.05*P.dens):0,t+3);
+    if(fifthG)fifthG.gain.linearRampToValueAtTime(P.bright*.035*(CH.droneFifth!==undefined?CH.droneFifth:1)*(1+.8*driveAmt()),t+3);
+    // bed (the static wash) starts near-zero and thickens with the arc;
+    // the moving layers (patter + gusts) carry the early minutes
+    if(rainG)rainG.gain.linearRampToValueAtTime(CH&&CH.rain?(.008+.055*P.dens):0,t+3);
+    if(rainHiG)rainHiG.gain.linearRampToValueAtTime(CH&&CH.rain?(.035+.06*P.dens):0,t+3);
+    if(rainGustG)rainGustG.gain.linearRampToValueAtTime(CH&&CH.rain?(.035+.025*P.dens):0,t+3);
   }
   return {
     async start(key,fadeSec){
@@ -642,13 +863,13 @@ const Engine=(()=>{
       const t=ctx.currentTime,g=master.gain;
       g.cancelScheduledValues(t); g.setValueAtTime(.0001,t);
       g.linearRampToValueAtTime(CH.vol,t+fadeSec);
-      startDrone(); noteLoop(); startArp(); startDrums();
+      startDrone(); noteLoop(); startArp(); startDrums(); startChimes(); startChords();
       applyParams();
     },
     stop(fadeSec){
       if(!ctx||!running){running=false;return;}
       running=false;
-      clearTimeout(noteTimer); clearInterval(arpTimer); clearInterval(drumTimer);
+      clearTimeout(noteTimer); clearInterval(arpTimer); clearInterval(drumTimer); clearTimeout(chimeTimer); clearTimeout(chordTimer);
       const t=ctx.currentTime,g=master.gain;
       g.cancelScheduledValues(t); g.setValueAtTime(g.value,t);
       g.linearRampToValueAtTime(0,t+fadeSec);
@@ -658,10 +879,11 @@ const Engine=(()=>{
     setChannel(key){
       const next=CHANNELS[key]||CHANNELS.ambient;
       if(!running){CH=next;return;}
-      clearInterval(arpTimer); clearInterval(drumTimer);
+      clearInterval(arpTimer); clearInterval(drumTimer); clearTimeout(chimeTimer); clearTimeout(chordTimer);
       stopDrone(2.5);
       CH=next;
-      startDrone(); startArp(); startDrums(); applyParams();
+      chordTones=null; chordIdx=0; curStage=''; curSet=null;
+      startDrone(); startArp(); startDrums(); startChimes(); startChords(); applyParams();
       const t=ctx.currentTime,g=master.gain;
       g.cancelScheduledValues(t); g.setValueAtTime(g.value,t);
       g.linearRampToValueAtTime(CH.vol,t+2);
@@ -671,7 +893,8 @@ const Engine=(()=>{
       P.bright=lerp(CH.brightLo,CH.brightHi,i);
       P.dens=lerp(CH.densLo,CH.densHi,i);
       P.space=lerp(CH.spaceFar,CH.spaceNear,i); // inverse: close-in through the middle, open at the edges
-      P.lofi=lerp(CH.lofiEdge,CH.lofiPeak,i);   // dustier at the edges, cleaner at the peak
+      P.lofi=lerp(CH.lofiStart,CH.lofiPeak,i);  // follows the curve: cleaner at the edges, dustier at the peak
+      phaseIx=phaseIdx; arcPos=i;
       resolveBias=phaseIdx===3?1.6:0.15;        // withhold the tonic until wind-down
       if(ctx&&running&&!fadingOut)applyParams();
     },
@@ -741,7 +964,7 @@ $('sheetBg').addEventListener('click',closeSheet);
 function go(scr){document.querySelectorAll('.scr').forEach(s=>s.classList.remove('on')); $(scr).classList.add('on');}
 function start(){
   const adaptiveOn=$('adaptiveToggle').classList.contains('on');
-  total = ($('demoFast') && $('demoFast').checked) ? 30 : sessionSec;
+  total = ($('demoFast') && $('demoFast').checked) ? 300 : sessionSec;
   elapsed=0; lastPhase=-1;
   $('time').textContent=fmt(total); $('ring').style.setProperty('--p',0); $('ph').style.left='0%';
   $('chip').classList.remove('paused');
