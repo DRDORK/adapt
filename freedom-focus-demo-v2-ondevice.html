@@ -328,7 +328,7 @@ let timer=null, elapsed=0, total=900, lastPhase=-1, sessionSec=900, blockNoteSho
 
 const STYLES=[
   {key:'ambient', name:'Ambient',    desc:'weightless pads and slow bells — pure stillness'},
-  {key:'lofi',    name:'Lo-fi',      desc:'tape-warm plucks, dusty and intimate'},
+  {key:'lofi',    name:'Lo-fi',      desc:'tape-warm plucks over a soft beat'},
   {key:'pulse',   name:'Pulse',      desc:'a soft synth pulse for steady momentum'},
   {key:'rain',    name:'Night Rain', desc:'distant weather and the occasional bell'},
 ];
@@ -347,8 +347,8 @@ const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
 const Engine=(()=>{ 
   let ctx=null, master, filter, dryG, wetG, conv;
   let wowDelay, wowLFO, wowDepth, cleanG, satPre, satShaper, satTone, satG, lofiBus, hissG;
-  let rainG=null;
-  let running=false, noteTimer=null, arpTimer=null, droneNodes=[], fifthG=null, CH=null;
+  let rainG=null, drumG=null;
+  let running=false, noteTimer=null, arpTimer=null, drumTimer=null, droneNodes=[], fifthG=null, CH=null;
   let resolveBias=1, sounding=[], fadingOut=false;
   let P={bright:.4, dens:.3, space:.8, lofi:.2};
 
@@ -366,7 +366,7 @@ const Engine=(()=>{
       brightLo:.30, brightHi:1.00, densLo:.10, densHi:.95,
       spaceFar:.85, spaceNear:.45, lofiEdge:.30, lofiPeak:.10,
       intLo:1.4, intHi:7, vol:.75},
-    lofi:{mix:[.40,.08,.52], arp:false, rain:false, drone:'triangle',
+    lofi:{mix:[.40,.08,.52], arp:false, drums:true, dbpm:74, rain:false, drone:'triangle',
       brightLo:.18, brightHi:.72, densLo:.15, densHi:1.00,
       spaceFar:.55, spaceNear:.28, lofiEdge:.85, lofiPeak:.55,
       intLo:1.1, intHi:5, vol:.8},
@@ -424,6 +424,10 @@ const Engine=(()=>{
     const rdep=ctx.createGain(); rdep.gain.value=.012;
     rlfo.connect(rdep); rdep.connect(rainG.gain); rlfo.start();
     rs.connect(rainG); rainG.connect(dryG); rs.start();
+
+    // drum bus: post-mood-filter so the kit keeps its shape, but through the
+    // tape stage so it glues to the plucks
+    drumG=ctx.createGain(); drumG.gain.value=1; drumG.connect(wowDelay);
 
     lofiBus.connect(dryG); lofiBus.connect(conv); conv.connect(wetG);
     dryG.connect(master); wetG.connect(master);
@@ -532,6 +536,60 @@ const Engine=(()=>{
       o.connect(g); g.connect(filter); o.start(now); o.stop(now+.7);
     },stepMs);
   }
+  function drumHit(type,vel,when){
+    if(type==='kick'){
+      const o=ctx.createOscillator(); o.type='sine';
+      o.frequency.setValueAtTime(150,when);
+      o.frequency.exponentialRampToValueAtTime(52,when+.10);
+      const g=ctx.createGain();
+      g.gain.setValueAtTime(0,when);
+      g.gain.linearRampToValueAtTime(.20*vel,when+.004);
+      g.gain.exponentialRampToValueAtTime(.0001,when+.28);
+      o.connect(g); g.connect(drumG); o.start(when); o.stop(when+.35);
+    } else if(type==='snare'){
+      const len=Math.floor(ctx.sampleRate*.2), b=ctx.createBuffer(1,len,ctx.sampleRate), d=b.getChannelData(0);
+      for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2);
+      const s=ctx.createBufferSource(); s.buffer=b;
+      const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1100; bp.Q.value=.8;
+      const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2600; // dull on purpose — no crack
+      const g=ctx.createGain(); g.gain.setValueAtTime(.085*vel,when);
+      const body=ctx.createOscillator(); body.type='sine'; body.frequency.value=185;
+      const bg=ctx.createGain(); bg.gain.setValueAtTime(.05*vel,when);
+      bg.gain.exponentialRampToValueAtTime(.0001,when+.12);
+      s.connect(bp); bp.connect(lp); lp.connect(g); g.connect(drumG);
+      body.connect(bg); bg.connect(drumG);
+      s.start(when); body.start(when); body.stop(when+.15);
+    } else { // shaker-soft hat
+      const len=Math.floor(ctx.sampleRate*.06), b=ctx.createBuffer(1,len,ctx.sampleRate), d=b.getChannelData(0);
+      for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,1.5);
+      const s=ctx.createBufferSource(); s.buffer=b;
+      const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=3800;
+      const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=8000;
+      const g=ctx.createGain(); g.gain.setValueAtTime(.028*vel,when);
+      s.connect(hp); hp.connect(lp); lp.connect(g); g.connect(drumG);
+      s.start(when);
+    }
+  }
+  function startDrums(){
+    if(!CH.drums)return;
+    const stepMs=60000/CH.dbpm/4; // 16th-note grid
+    const KICK =[1,0,0,0, 0,0,0,1, 0,0,1,0, 0,0,0,0];
+    const SNARE=[0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
+    const HAT  =[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1];
+    let step=0;
+    drumTimer=setInterval(()=>{
+      if(!running)return;
+      const s=step%16; step++;
+      const swing=(s%2)?stepMs*.00018:0;   // lazy lo-fi swing
+      const when=ctx.currentTime+.02+swing;
+      const level=.35+.65*P.dens;          // kit rides the arc: faint early, fuller at the peak
+      if(level<.45&&s%4!==0)return;        // thin the pattern at very low intensity
+      if(KICK[s])drumHit('kick',level*rand(.85,1.05),when);
+      if(SNARE[s])drumHit('snare',level*rand(.8,1),when);
+      if(HAT[s]&&Math.random()<.85)drumHit('hat',level*rand(.6,1),when);
+      if(s===9&&Math.random()<.25)drumHit('kick',level*.5,when); // ghost note
+    },stepMs);
+  }
   function startDrone(){
     [-4,3].forEach(dt=>{
       const o=ctx.createOscillator(); o.type=CH.drone; o.frequency.value=ROOT/2; o.detune.value=dt;
@@ -584,13 +642,13 @@ const Engine=(()=>{
       const t=ctx.currentTime,g=master.gain;
       g.cancelScheduledValues(t); g.setValueAtTime(.0001,t);
       g.linearRampToValueAtTime(CH.vol,t+fadeSec);
-      startDrone(); noteLoop(); startArp();
+      startDrone(); noteLoop(); startArp(); startDrums();
       applyParams();
     },
     stop(fadeSec){
       if(!ctx||!running){running=false;return;}
       running=false;
-      clearTimeout(noteTimer); clearInterval(arpTimer);
+      clearTimeout(noteTimer); clearInterval(arpTimer); clearInterval(drumTimer);
       const t=ctx.currentTime,g=master.gain;
       g.cancelScheduledValues(t); g.setValueAtTime(g.value,t);
       g.linearRampToValueAtTime(0,t+fadeSec);
@@ -600,10 +658,10 @@ const Engine=(()=>{
     setChannel(key){
       const next=CHANNELS[key]||CHANNELS.ambient;
       if(!running){CH=next;return;}
-      clearInterval(arpTimer);
+      clearInterval(arpTimer); clearInterval(drumTimer);
       stopDrone(2.5);
       CH=next;
-      startDrone(); startArp(); applyParams();
+      startDrone(); startArp(); startDrums(); applyParams();
       const t=ctx.currentTime,g=master.gain;
       g.cancelScheduledValues(t); g.setValueAtTime(g.value,t);
       g.linearRampToValueAtTime(CH.vol,t+2);
