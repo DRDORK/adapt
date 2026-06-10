@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Adaptive Focus Music · Freedom internal demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@400;500;600;700&family=Young+Serif&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#F4F1E8; --ink:#1f2d1c; --deep:#1F3A1D; --sage:#7BA05B;
+    --soft:#5a6a58; --card:#fdfefc; --line:#e3e0d3; --gold:#F5C242; --lime:#A8E34A;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--cream); color:var(--ink); font-family:'Gabarito',system-ui,sans-serif; line-height:1.65;}
+  .wrap{max-width:760px; margin:0 auto; padding:56px 24px 80px;}
+
+  .eyebrow{font-size:12px; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:var(--sage); margin-bottom:18px;}
+  h1{font-family:'Young Serif',serif; font-weight:400; font-size:clamp(34px,5.5vw,48px); line-height:1.12; color:var(--deep); margin-bottom:18px;}
+  .lede{font-size:19px; color:var(--soft); max-width:620px; margin-bottom:8px;}
+
+  h2{font-family:'Young Serif',serif; font-weight:400; font-size:27px; color:var(--deep); margin:64px 0 14px;}
+  h3{font-size:16px; font-weight:700; color:var(--deep); margin:22px 0 6px;}
+  p{margin-bottom:14px; max-width:680px;}
+  .dim{color:var(--soft);}
+
+  /* demo embed */
+  .demo-shell{margin:56px auto 8px; text-align:center;}
+  .demo-frame{
+    width:430px; max-width:100%; height:1010px; border:none; border-radius:24px;
+    box-shadow:0 24px 70px rgba(31,58,29,.18);
+    background:#d9ddd4;
+  }
+  .demo-howto{
+    max-width:430px; margin:18px auto 0; text-align:left; background:var(--card);
+    border:1px solid var(--line); border-radius:14px; padding:18px 20px; font-size:14px;
+  }
+  .demo-howto b{color:var(--deep);}
+  .demo-howto ol{margin:8px 0 0 18px;}
+  .demo-howto li{margin-bottom:6px;}
+
+  /* channel cards */
+  .channels{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:20px 0 6px;}
+  @media (max-width:560px){.channels{grid-template-columns:1fr;}}
+  .ch{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px;}
+  .ch .nm{font-weight:700; color:var(--deep); margin-bottom:4px;}
+  .ch .d{font-size:14px; color:var(--soft);}
+
+  /* value list */
+  .vals{margin:18px 0 6px;}
+  .val{display:flex; gap:14px; margin-bottom:16px; max-width:680px;}
+  .val .dot{flex-shrink:0; width:10px; height:10px; border-radius:50%; background:var(--sage); margin-top:9px;}
+  .val b{color:var(--deep);}
+
+  /* future panel */
+  .future{background:var(--deep); color:#e8efe5; border-radius:20px; padding:36px 34px; margin-top:26px;}
+  .future h2{color:#fff; margin:0 0 14px;}
+  .future h3{color:var(--lime); margin:24px 0 6px; font-size:15px; letter-spacing:.04em;}
+  .future p{color:#c9d6c5;}
+  .future .pill{display:inline-block; background:var(--lime); color:var(--deep); font-size:11px; font-weight:700; letter-spacing:.08em; padding:3px 10px; border-radius:9px; margin-bottom:14px;}
+
+  .arcline{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:16px 20px; margin:18px 0; font-size:14.5px; color:var(--soft);
+  }
+  .arcline b{color:var(--deep);}
+
+  footer{margin-top:70px; padding-top:24px; border-top:1px solid var(--line); font-size:13px; color:var(--soft);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Freedom · Internal demo · Adaptive Focus Music</div>
+  <h1>Music that knows how long you're working</h1>
+  <p class="lede">Adaptive Focus Music composes a live soundtrack for every Freedom session, shaped to its exact length. It builds while you work and resolves when you're done. Nothing streams: every note is generated on the device, so it costs nothing per minute and keeps playing through a full internet block.</p>
+
+  <!-- ================= DEMO ================= -->
+  <div class="demo-shell">
+    <iframe class="demo-frame" src="freedom-focus-demo-v2-ondevice.html" title="Adaptive Focus Music demo"></iframe>
+    <div class="demo-howto">
+      <b>Driving the demo</b>
+      <ol>
+        <li>Toggle <b>Adaptive Focus Music</b> on. You'll hit the paywall: that's part of the demo (it's a Premium feature). Tap through the free trial.</li>
+        <li>Pick a <b>Style</b>, then <b>START THE SESSION</b>.</li>
+        <li>Under <b>⚙ Demo controls</b> (below the phone), "run in 5 minutes" compresses the full arc so you can hear the whole shape. Uncheck it to run the real selected length.</li>
+        <li>Try the "block all internet" checkbox: the music keeps playing. That's the point.</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ================= WHAT IT IS ================= -->
+  <h2>Shaped to the session, not the other way around</h2>
+  <p>When a session starts, the music starts composing. Set 25 minutes and you get a 25-minute arc: a calm opening while you settle in, a long gradual build through deep focus, a lift for the final stretch, and a wind-down that ends exactly when you do. Set 3 hours and the same arc stretches to fit, with the on-ramp and wind-down staying tight while the deep-focus middle absorbs the length.</p>
+  <div class="arcline"><b>The arc:</b> settling in (low) → deep focus (a plateau that quietly rises) → final stretch (the peak) → wind-down (resolution). Intensity moves continuously, not in steps. Texture, brightness, rhythm, reverb, and harmony all ride the same curve.</div>
+  <p>This is something a fixed track can't do. Our composed Focus Music tracks are 25 minutes long because a file has to be some length. The craft in them was never the duration; it was the arc. This engine carries the arc forward and frees it from any fixed length.</p>
+
+  <h2>The unresolved chord is doing the work</h2>
+  <p>Freedom's original Focus Music was written by a concert pianist around one idea: keep the harmony away from its home chord until the work is done. That faint unresolved pull keeps you in the chair, and the resolution at the end gives the session a real sense of completion.</p>
+  <p>Streaming AI music services can't reproduce this. They don't control harmony. This engine does, because we wrote it. Through the early session the progressions circle home without ever landing on it. As you climb toward the peak, the tonic starts appearing in passing inversions: partial resolutions, home glimpsed but not grounded. The final stretch lifts into high, bright voicings. And in the wind-down, for the first time in the whole session, the harmony lands fully on home in root position while the melodies do the same. You've been hearing "almost there" the entire time without knowing it. Then you're done, and so is the music.</p>
+
+  <h2>Built to be ignored</h2>
+  <p>Every note is chosen in real time from rule systems with consonance guards, so the music evolves continuously but never clashes, never startles, and never grabs attention. No vocals, no drops, no sudden anything. Sustained tones are checked against everything still ringing before they're allowed to sound. Even the percussion is designed around this: snares with no crack, cymbals that swell instead of strike. Reduced auditory salience is the gating principle behind our composed tracks, and here it's enforced by code.</p>
+  <p>And because nothing is a loop, no two sessions are ever the same. The drum patterns re-roll every eight bars, breakdowns arrive unpredictably, chord progressions re-draw from staged pools, and the windchimes only ring when a simulated breeze passes.</p>
+
+  <h2>Four channels, four characters</h2>
+  <div class="channels">
+    <div class="ch"><div class="nm">Ambient</div><div class="d">Weightless pads and slow bells. At the peak the texture blooms: more shimmer, more bells, the drone's fifth swelling underneath.</div></div>
+    <div class="ch"><div class="nm">Lo-fi</div><div class="d">Tape-warm electric piano and plucked melodies over a soft beat that assembles itself as you go deeper: hats, then shaker, then kick, bongos, backbeat, and a driving full kit at the peak.</div></div>
+    <div class="ch"><div class="nm">Pulse</div><div class="d">A gentle synth pulse for steady momentum, with melodies locked to its grid.</div></div>
+    <div class="ch"><div class="nm">Night Rain</div><div class="d">Rain with real weather in it: layers that gust and recede, soft plucks, and distant windchimes that ring when a breeze passes.</div></div>
+  </div>
+
+  <h2>Why on-device wins</h2>
+  <div class="vals">
+    <div class="val"><div class="dot"></div><div><b>It plays through a full block.</b> Freedom's whole point is turning the internet off. A streaming music service dies the moment you block everything. This music is generated on the device, so it keeps playing through a block-everything session, on a plane, anywhere. It can't be interrupted by the very thing it's there to support.</div></div>
+    <div class="val"><div class="dot"></div><div><b>Zero marginal cost.</b> No per-minute licensing, no streaming infrastructure, no usage quotas, no metering. The economics of a streaming partner forced this to be a premium-only feature. On-device generation makes the packaging a product decision instead of a cost constraint.</div></div>
+    <div class="val"><div class="dot"></div><div><b>Completely private.</b> No audio or usage data leaves the device. Nothing to buffer, nothing to track, no cellular data used.</div></div>
+    <div class="val"><div class="dot"></div><div><b>We own every note.</b> No third-party licensing, no royalty questions, no sub-licensing tiers, no dependency on a vendor's roadmap. The musical rules are Freedom intellectual property, written in-house.</div></div>
+    <div class="val"><div class="dot"></div><div><b>It extends a real product strength.</b> Focus Sounds and composed Focus Music are among the most-loved parts of Freedom in reviews. This is the same musical DNA made infinite, session-aware, and impossible to outgrow.</div></div>
+  </div>
+
+  <!-- ================= FUTURE ================= -->
+  <div class="future">
+    <span class="pill">WHERE THIS GOES</span>
+    <h2>From demo to instrument</h2>
+
+    <h3>THE NATIVE PORT: AVAUDIOENGINE</h3>
+    <p>This demo runs on the Web Audio API, which ships in every browser and every iOS/Android webview today. The production target is Apple's AVAudioEngine, the same node-graph architecture in native form. Everything hard about this feature, the arc scheduler, the chord engine, the consonance rules, the arrangement logic, is platform-independent math that ports as-is. What the native layer adds is the thing a webview can't promise: music that keeps generating with the screen locked and the phone in a pocket for an entire 3-hour session.</p>
+
+    <h3>REAL INSTRUMENTS: THE SAMPLER</h3>
+    <p>AVAudioEngine includes AVAudioUnitSampler, a true sampler instrument: audio files mapped across the keyboard with velocity layers and envelopes. Freedom owns thousands of hours of original stems from real recordings. A curated set of those, a piano sampled across its register, bowed strings, real percussion, turns this from a synth engine into an instrument that plays our own recordings, generatively recomposed, never repeating. No other focus product can have that sound, because no one else has the source material.</p>
+
+    <h3>COMPOSING THE COMPOSER</h3>
+    <p>The most interesting part of building this was the process: a musician describing what the music should do, in musical language, and the engine learning it as permanent rules. "Withhold the tonic until the end." "Let the tonic appear in inversions first." "The plateau should rise." "That drone clashes against a sustained second." Each of those became code within minutes of being said, and the engine never forgets a rule once it's learned.</p>
+    <p>That working method scales. Next layers on the same foundation: motif and phrase structure, so melodies develop ideas instead of wandering. Voice-leading rules. Modulation between keys across long sessions. Session length mapping to musical form, not just an intensity curve. Independent tension curves for harmony, rhythm, and register. Every one of these is scheduling math plus musical judgment, and we have both in-house.</p>
+  </div>
+
+  <footer>
+    Internal demo. Music generated entirely on this device via the Web Audio API: no servers, no streaming, no audio data in or out. The phone mockup above is the proposed session UI; the paywall and trial flows are simulated.
+  </footer>
+
+</div>
+</body>
+</html>
