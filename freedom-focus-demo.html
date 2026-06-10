@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Freedom · Adaptive Focus Music — demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@400;500;600;700;800&family=Young+Serif&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#e8efe5; --card:#fdfefc; --ink:#1f2d1c; --label:#26331f;
+    --green:#6f9961; --dgreen:#5e7d52; --deep:#2f5d2c; --line:#e7e8df; --muted:#9aa39a;
+    --toggle-off:#c4c2b6; --chipbg:#e6efe3; --sage:#7ba05b;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; min-height:100vh; background:#d9ddd4; font-family:'Gabarito',system-ui,sans-serif;
+    display:flex; flex-direction:column; align-items:center; padding:26px 16px; gap:16px;}
+
+  .phone{width:393px; max-width:100%; height:780px; background:var(--bg); border-radius:42px;
+    box-shadow:0 18px 60px rgba(20,40,20,.28), inset 0 0 0 11px #11140f, inset 0 0 0 13px #2b2f27;
+    position:relative; overflow:hidden;}
+  .scr{position:absolute; inset:13px; border-radius:30px; display:none; flex-direction:column; overflow:hidden;}
+  .scr.on{display:flex;}
+  .statusbar{display:flex; justify-content:space-between; align-items:center; padding:14px 26px 6px; font-size:16px; font-weight:600; color:var(--ink); flex-shrink:0;}
+  .scrollbody{flex:1; min-height:0; overflow-y:auto; padding:6px 18px 22px; display:flex; flex-direction:column; gap:18px;}
+  .scrollbody > *{flex-shrink:0;}
+
+  .screen-title{font-size:27px; font-weight:700; color:var(--ink); text-align:center; margin:8px 0 6px;}
+
+  /* segmented controls */
+  .seg3,.seg2{display:flex; background:#fff; border-radius:26px; padding:5px; box-shadow:0 1px 3px rgba(30,45,28,.06);}
+  .seg3 .s3,.seg2 .s2{flex:1; border:none; background:none; font-family:inherit; font-weight:700; font-size:13px; letter-spacing:.07em; color:var(--green); padding:12px 0; border-radius:22px; cursor:pointer;}
+  .seg3 .s3.on,.seg2 .s2.on{background:var(--dgreen); color:#fff;}
+
+  .card{background:var(--card); border-radius:18px; box-shadow:0 1px 3px rgba(30,45,28,.05); overflow:hidden;}
+  .rw{display:flex; align-items:center; justify-content:space-between; padding:16px 18px; gap:12px;}
+  .rw + .rw{border-top:1px solid var(--line);}
+  .rw .lbl{font-weight:700; color:var(--label); font-size:16px; display:flex; align-items:center; gap:13px;}
+  .rw .val{color:var(--green); font-size:15.5px; font-weight:600; display:flex; align-items:center; gap:8px;}
+  .rw .val.ink{color:var(--ink);} .chev{color:#2f5d2c; font-size:19px; opacity:.8;}
+  .ico{width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center;}
+
+  /* length card */
+  .lengthcard{padding:14px;}
+  .seg2{margin-bottom:14px;}
+  .chips{display:flex; flex-wrap:wrap; gap:11px;}
+  .chip{border:none; background:var(--chipbg); color:var(--green); font-family:inherit; font-weight:700; font-size:15px; padding:13px 20px; border-radius:24px; cursor:pointer;}
+  .chip.on{background:var(--dgreen); color:#fff;}
+  .chip.custom{display:flex; align-items:center; gap:7px;}
+
+  /* iOS toggle */
+  .tg{width:50px; height:30px; border-radius:15px; background:var(--toggle-off); position:relative; transition:background .2s; flex-shrink:0; cursor:pointer;}
+  .tg.on{background:var(--deep);}
+  .tg::after{content:""; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:left .2s;}
+  .tg.on::after{left:23px;}
+  .prempill{background:#F5C242; color:#1f2d1c; font-size:10px; font-weight:700; letter-spacing:.04em; padding:2px 7px; border-radius:7px; margin-left:8px; vertical-align:middle;}
+  .cap{font-size:12.5px; color:var(--muted); padding:0 6px; line-height:1.5;}
+  .seclbl{font-size:13px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; padding:4px 6px 0;}
+
+  /* footer: start button + tab bar */
+  .footer{flex-shrink:0; background:#fff; padding:14px 16px 8px; border-radius:0 0 30px 30px; box-shadow:0 -4px 16px rgba(20,40,20,.05);}
+  .startbtn{width:100%; margin:0 0 10px; background:var(--sage); color:#fff; border:none; border-radius:28px; padding:17px; font-family:inherit; font-size:16px; font-weight:700; letter-spacing:.05em; cursor:pointer;}
+  .startbtn:active{opacity:.9;}
+  .tabbar{display:flex; padding:2px 2px 4px;}
+  .tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; font-size:10.5px; font-weight:600; color:#8a948a;}
+  .tab svg{width:23px; height:23px;}
+  .tab.active{color:var(--sage);}
+
+  /* running screen */
+  .navbar{display:grid; grid-template-columns:1fr auto 1fr; align-items:center; padding:10px 20px 16px; flex-shrink:0;}
+  .navbar .lft{color:var(--green); font-size:16px; font-weight:500;}
+  .navbar .ttl{font-size:19px; font-weight:700; color:var(--ink); text-align:center; white-space:nowrap;}
+  .runbody{flex:1; min-height:0; overflow-y:auto; padding:0 16px 20px; display:flex; flex-direction:column; gap:16px;}
+  .ring{width:212px; height:212px; border-radius:50%; margin:14px auto 6px;
+    background:conic-gradient(var(--deep) calc(var(--p,0)*1%), #d7e2d4 0);
+    display:flex; align-items:center; justify-content:center;}
+  .ring .inner{width:184px; height:184px; border-radius:50%; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;}
+  .ring .time{font-size:42px; font-weight:700; color:var(--ink); letter-spacing:-1px;}
+  .ring .of{font-size:13px; color:var(--muted);}
+  .phasechip{display:flex; align-items:center; gap:10px; justify-content:center; margin:4px 0 2px;}
+  .wave{display:inline-flex; gap:2px; align-items:flex-end; height:18px;}
+  .wave i{width:3px; background:var(--green); border-radius:2px; animation:bounce 1s infinite ease-in-out;}
+  .wave i:nth-child(1){height:7px;animation-delay:0s} .wave i:nth-child(2){height:15px;animation-delay:.15s}
+  .wave i:nth-child(3){height:10px;animation-delay:.3s} .wave i:nth-child(4){height:17px;animation-delay:.45s}
+  .wave i:nth-child(5){height:8px;animation-delay:.6s}
+  @keyframes bounce{0%,100%{transform:scaleY(.5)}50%{transform:scaleY(1)}}
+  .paused .wave i{animation-play-state:paused;}
+  .phasechip .nm{font-size:17px; font-weight:700; color:var(--ink);}
+  .arc{display:flex; height:46px; border-radius:11px; overflow:hidden; position:relative; margin-top:4px; border:1px solid var(--line);}
+  .arc .seg{display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:10px; font-weight:600; color:#3c4f3b; line-height:1.15; text-align:center; border-right:1px solid rgba(255,255,255,.7);}
+  .arc .seg:last-child{border-right:none;}
+  .s-low{background:#eef4ed;} .s-med{background:#d8e7d6;} .s-high{background:#bcd6b8;}
+  .ph{position:absolute; top:0; bottom:0; width:2px; background:var(--ink); left:0; transition:left .9s linear;}
+  .endbtn{margin:auto 0 4px; background:var(--card); color:var(--deep); border:1px solid #d7e2d4; border-radius:16px; padding:16px; font-family:inherit; font-size:16px; font-weight:700; cursor:pointer;}
+
+  /* style picker sheet */
+  .sheet-bg{position:absolute; inset:13px; border-radius:30px; background:rgba(25,40,22,.32); display:none; z-index:20;}
+  .sheet-bg.on{display:block;}
+  .sheet{position:absolute; left:13px; right:13px; bottom:13px; background:var(--bg); border-radius:24px 24px 30px 30px; padding:10px 14px 22px; z-index:21; transform:translateY(110%); transition:transform .28s ease; box-shadow:0 -8px 30px rgba(20,40,20,.18);}
+  .sheet.on{transform:translateY(0);}
+  .sheet .grab{width:38px; height:5px; border-radius:3px; background:#cdd3c8; margin:6px auto 12px;}
+  .sheet h4{margin:0 4px 4px; font-size:17px; color:var(--ink);}
+  .sheet .sub{margin:0 4px 12px; font-size:12.5px; color:var(--muted); line-height:1.5;}
+  .opt{display:flex; align-items:center; justify-content:space-between; padding:15px 16px; background:var(--card); border-radius:13px; margin-top:9px; cursor:pointer; font-size:16px; font-weight:600; color:var(--ink);}
+  .opt .sub2{font-size:12px; color:var(--muted); font-weight:400; margin-top:2px;}
+  .opt .check{color:var(--deep); font-size:19px; opacity:0;}
+  .opt.sel .check{opacity:1;}
+  .sheet .note{margin:14px 4px 0; font-size:11px; color:var(--muted); line-height:1.5;}
+
+  /* offline alert */
+  .alert-bg{position:absolute; inset:13px; border-radius:30px; background:rgba(15,25,13,.45); display:none; align-items:center; justify-content:center; padding:30px; z-index:40;}
+  .alert-bg.on{display:flex;}
+  .alert{width:100%; max-width:300px; background:#fbfdfa; border-radius:16px; overflow:hidden; text-align:center; box-shadow:0 22px 55px rgba(0,0,0,.35);}
+  .alert .pad{padding:21px 18px 16px;}
+  .alert h3{margin:0 0 8px; font-size:17px; color:var(--ink);}
+  .alert p{margin:0; font-size:13.5px; color:#5a655a; line-height:1.5;}
+  .alert .btns{display:flex; border-top:1px solid var(--line);}
+  .alert .btns button{flex:1; background:none; border:none; padding:14px; font-family:inherit; font-size:16px; cursor:pointer; color:var(--green); font-weight:700;}
+  .alert .btns button.alt{font-weight:400; color:#7a857a; border-right:1px solid var(--line);}
+
+  /* paywall */
+  .paywall{position:absolute; inset:13px; border-radius:30px; background:#1f3a1d; display:none; flex-direction:column; z-index:50; overflow-y:auto;}
+  .paywall.on{display:flex;}
+  .pw-head{display:flex; align-items:center; justify-content:space-between; padding:16px 18px 8px; flex-shrink:0;}
+  .pw-head .t{display:flex; align-items:center; gap:9px; color:#fff; font-weight:700; font-size:18px;}
+  .pw-logo{height:24px; width:auto; display:block;}
+  .pw-x{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;border:none;font-size:14px;cursor:pointer;}
+  .pw-card{background:#f1f4ee; border-radius:18px; margin:6px 16px 0; padding:24px 22px; text-align:center;}
+  .pw-card h2{font-family:'Young Serif',serif; font-weight:400; color:#2f5d2c; font-size:24px; margin:0 0 16px; line-height:1.15;}
+  .pw-badge-icon{width:90px;height:90px;margin:0 auto 16px;display:block;}
+  .pw-lead{font-weight:700; color:#1f2d1c; font-size:17px; margin:0 0 8px;}
+  .pw-body{color:#3c4a3a; font-size:13.5px; line-height:1.5; margin:0;}
+  .pw-dots{display:flex;gap:7px;justify-content:center;padding:15px 0 4px;}
+  .pw-dots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.28);}
+  .pw-dots i.on{background:#fff;}
+  .pw-press{display:flex;gap:20px;align-items:center;justify-content:center;padding:8px 0 12px;color:#c4cfc2;font-family:Georgia,serif;font-size:15px;font-weight:700;letter-spacing:.03em;}
+  .pw-press .wired{font-family:Arial,sans-serif;letter-spacing:.2em;font-size:13px;}
+  .pw-pricing{margin-top:auto; background:#13230f; padding:16px 16px 18px; border-radius:0 0 30px 30px;}
+  .pw-plan{position:relative; display:flex; align-items:center; justify-content:space-between; border:1.5px solid #3a4d38; border-radius:14px; padding:13px 15px; margin-bottom:11px; color:#fff;}
+  .pw-plan.sel{border-color:#F5C242;}
+  .pw-plan .left{display:flex; align-items:center; gap:11px;}
+  .pw-rad{width:21px;height:21px;border-radius:50%;border:2px solid #6a7a67;flex-shrink:0;}
+  .pw-plan.sel .pw-rad{border-color:#F5C242;background:#F5C242;}
+  .pw-plan .name{font-weight:700;font-size:16px;}
+  .pw-plan .sub{font-size:11px;color:#aab6a8;margin-top:2px;}
+  .pw-plan .price{font-weight:700;font-size:17px;}
+  .pw-badge{position:absolute; top:-10px; right:13px; background:#F5C242; color:#1f2d1c; font-size:11px; font-weight:700; padding:3px 9px; border-radius:9px;}
+  .pw-cta{width:100%; background:#7BA05B; color:#fff; border:none; border-radius:15px; padding:15px; font-weight:700; font-size:16px; letter-spacing:.02em; cursor:pointer;}
+
+  /* trial confirmation */
+  .confirm{position:absolute; inset:13px; border-radius:30px; background:rgba(15,25,13,.5); display:none; align-items:center; justify-content:center; padding:30px; z-index:60;}
+  .confirm.on{display:flex;}
+  .confirm .box{background:#fbfdfa; border-radius:18px; padding:26px 22px; text-align:center; max-width:290px; box-shadow:0 22px 55px rgba(0,0,0,.4);}
+  .confirm .box .big{font-size:34px;}
+  .confirm .box h3{font-family:'Young Serif',serif;font-weight:400;color:#2f5d2c;font-size:21px;margin:10px 0 8px;}
+  .confirm .box p{color:#3c4a3a;font-size:14px;line-height:1.5;margin:0 0 18px;}
+  .confirm .box button{background:#7BA05B;color:#fff;border:none;border-radius:13px;padding:12px 26px;font-family:inherit;font-weight:700;font-size:15px;cursor:pointer;}
+
+  .setup{width:393px; max-width:100%; border:1px dashed #aeb4a6; border-radius:14px; background:#eef0ea; padding:12px 15px;}
+  .setup summary{cursor:pointer; font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:#828a7e; font-weight:700; list-style:none;}
+  .setup summary::-webkit-details-marker{display:none;}
+  .setup input[type=text]{width:100%; margin-top:9px; padding:10px; border:1px solid #d8dad2; border-radius:9px; font-family:inherit; font-size:12px; background:#fff;}
+  .setup .h{font-size:11px; color:#8a917f; margin-top:7px; line-height:1.5;}
+  .setup label{display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12px;color:#6b7d6a;cursor:pointer;line-height:1.4;}
+  .setup label input{margin-top:2px;}
+
+  /* status bar icon helper */
+  .sb{vertical-align:middle;}
+</style>
+</head>
+<body>
+ <div class="phone">
+
+  <!-- ===== SCREEN A: Sessions ===== -->
+  <div class="scr on" id="editScreen">
+    <div class="statusbar"><span>8:31</span><span><svg class="sb" viewBox="0 0 70 14" width="64" height="13" xmlns="http://www.w3.org/2000/svg"><g fill="#1f2d1c"><rect x="0" y="8" width="3" height="5" rx="1"/><rect x="5" y="6" width="3" height="7" rx="1"/><rect x="10" y="3.5" width="3" height="9.5" rx="1"/><rect x="15" y="1" width="3" height="12" rx="1"/></g><g fill="none" stroke="#1f2d1c" stroke-width="2" stroke-linecap="round"><path d="M25 5.5a9 9 0 0 1 13 0"/><path d="M28 8.5a5 5 0 0 1 7 0"/></g><circle cx="31.5" cy="11.5" r="1.3" fill="#1f2d1c"/><rect x="47" y="2.5" width="18" height="9" rx="2.5" fill="none" stroke="#1f2d1c" stroke-width="1.4"/><rect x="48.6" y="4.2" width="12" height="5.6" rx="1" fill="#1f2d1c"/><rect x="65.6" y="5" width="1.8" height="4" rx="0.9" fill="#1f2d1c"/></svg></span></div>
+    <div class="scrollbody">
+
+      <h1 class="screen-title">Sessions</h1>
+      <div class="seg3"><button class="s3 on">NOW</button><button class="s3">LATER</button><button class="s3">RECURRING</button></div>
+
+      <div class="card"><div class="rw"><span class="lbl">Name</span><span class="val">Monday 15m Session</span></div></div>
+
+      <div class="card">
+        <div class="rw"><span class="lbl"><span class="ico"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#2f5d2c" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3l7 2.7v5.1c0 4.4-3 7.4-7 8.9-4-1.5-7-4.5-7-8.9V5.7L12 3z"/></svg></span>Blocklists</span><span class="val">Instagram.com only <span class="chev">›</span></span></div>
+        <div class="rw"><span class="lbl"><span class="ico"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#2f5d2c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="13" height="10" rx="2"/><path d="M7 19h7M10.5 15v4"/><text x="16.5" y="9.6" font-size="8" fill="#2f5d2c" stroke="none" font-family="Gabarito,sans-serif" font-weight="700">0</text></svg></span>Devices</span><span class="val">This Device <span class="chev">›</span></span></div>
+      </div>
+
+      <div class="card lengthcard">
+        <div class="seg2"><button class="s2 on">LENGTH</button><button class="s2">END TIME</button></div>
+        <div class="chips">
+          <button class="chip on" data-sec="900">15 MIN</button>
+          <button class="chip" data-sec="1500">25 MIN</button>
+          <button class="chip" data-sec="3600">1 HR</button>
+          <button class="chip" data-sec="7200">2 HRS</button>
+          <button class="chip" data-sec="18000">5 HRS</button>
+          <button class="chip" data-sec="86400">24 HRS</button>
+          <button class="chip custom"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#6f9961" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6M3 21l3.5-.8L19 7.7a2 2 0 0 0 0-2.8l-1-1a2 2 0 0 0-2.8 0L2.8 16.5 2 20z"/></svg> CUSTOM</button>
+        </div>
+      </div>
+
+      <!-- NEW: Adaptive Focus Music (scroll down to reach) -->
+      <div class="seclbl">Focus Music</div>
+      <div class="card">
+        <div class="rw"><span class="lbl"><span class="ico"><svg viewBox="0 0 24 24" width="21" height="21"><rect x="3" y="10" width="3" height="5" rx="1.5" fill="#2f5d2c"/><rect x="8" y="5" width="3" height="10" rx="1.5" fill="#F5C242"/><rect x="13" y="8" width="3" height="7" rx="1.5" fill="#2f5d2c"/><rect x="18" y="3" width="3" height="12" rx="1.5" fill="#2f5d2c"/></svg></span>Adaptive Focus Music<span class="prempill" id="premiumPill">PREMIUM</span></span><span class="tg" id="adaptiveToggle" data-toggle></span></div>
+        <div class="rw" id="soundPickRow" style="cursor:pointer"><span class="lbl" style="font-weight:500;color:var(--ink)">Style</span><span class="val"><span id="styleVal">Lo-fi</span> <span class="chev">›</span></span></div>
+      </div>
+      <div class="cap" id="adaptiveCap">Personalized music that keeps you in flow, building and easing across your whole session.</div>
+
+    </div>
+
+    <div class="footer">
+      <button class="startbtn" id="startBtn">START THE SESSION</button>
+      <div class="tabbar">
+        <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.5 12h-2M21.5 12h-2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"/></svg><span>Today</span></div>
+        <div class="tab active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4h12l-2.5 4L18 12H6"/></svg><span>Sessions</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3l7 2.7v5.1c0 4.4-3 7.4-7 8.9-4-1.5-7-4.5-7-8.9V5.7L12 3z"/></svg><span>Blocklists</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l11-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>Sounds</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l1.8-1.4-2-3.4-2.1.9a7.6 7.6 0 0 0-1.7-1L15 3.5H9l-.4 2.2a7.6 7.6 0 0 0-1.7 1l-2.1-.9-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-1.8 1.4 2 3.4 2.1-.9a7.6 7.6 0 0 0 1.7 1L9 20.5h6l.4-2.2a7.6 7.6 0 0 0 1.7-1l2.1.9 2-3.4z"/></svg><span>Settings</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN B: Running session ===== -->
+  <div class="scr" id="runScreen">
+    <div class="statusbar"><span>8:31</span><span><svg class="sb" viewBox="0 0 70 14" width="64" height="13" xmlns="http://www.w3.org/2000/svg"><g fill="#1f2d1c"><rect x="0" y="8" width="3" height="5" rx="1"/><rect x="5" y="6" width="3" height="7" rx="1"/><rect x="10" y="3.5" width="3" height="9.5" rx="1"/><rect x="15" y="1" width="3" height="12" rx="1"/></g><g fill="none" stroke="#1f2d1c" stroke-width="2" stroke-linecap="round"><path d="M25 5.5a9 9 0 0 1 13 0"/><path d="M28 8.5a5 5 0 0 1 7 0"/></g><circle cx="31.5" cy="11.5" r="1.3" fill="#1f2d1c"/><rect x="47" y="2.5" width="18" height="9" rx="2.5" fill="none" stroke="#1f2d1c" stroke-width="1.4"/><rect x="48.6" y="4.2" width="12" height="5.6" rx="1" fill="#1f2d1c"/><rect x="65.6" y="5" width="1.8" height="4" rx="0.9" fill="#1f2d1c"/></svg></span></div>
+    <div class="navbar"><span class="lft" id="backBtn">‹ Back</span><span class="ttl">Monday 15m Session</span><span></span></div>
+    <div class="runbody">
+      <div class="ring" id="ring"><div class="inner"><span class="time" id="time">15:00</span><span class="of">remaining</span></div></div>
+      <div class="card" style="padding:16px 17px;">
+        <div class="phasechip paused" id="chip">
+          <span class="wave"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="nm" id="phaseName">Settling in</span>
+        </div>
+        <div class="arc" id="arc">
+          <div class="seg s-low"  style="flex:15">Settling in</div>
+          <div class="seg s-med"  style="flex:55">Deep focus</div>
+          <div class="seg s-high" style="flex:22">Final stretch</div>
+          <div class="seg s-low"  style="flex:8">Wind-down</div>
+          <div class="ph" id="ph"></div>
+        </div>
+        <div class="cap" style="text-align:center;padding-top:11px;" id="runCap">Adaptive Focus Music · calm on-ramp</div>
+      </div>
+      <button class="endbtn" id="endBtn">End Session</button>
+    </div>
+  </div>
+
+  <!-- Style picker -->
+  <div class="sheet-bg" id="sheetBg"></div>
+  <div class="sheet" id="styleSheet">
+    <div class="grab"></div>
+    <h4>Focus Music Style</h4>
+    <p class="sub">Pick a vibe. Freedom keeps it going and adjusts the energy as you focus.</p>
+    <div id="styleOpts"></div>
+    <div class="note">Channels shown are illustrative. The real app pulls the live list from Mubert's <code>/playlists</code>.</div>
+  </div>
+
+  <!-- Block-all fallback alert -->
+  <div class="alert-bg" id="alertBg">
+    <div class="alert">
+      <div class="pad">
+        <h3>This session blocks all internet</h3>
+        <p>Adaptive Focus Music streams live, so it can't play while everything's blocked. Open Sounds for offline focus tracks that work through a full block.</p>
+      </div>
+      <div class="btns"><button class="alt" id="alertClose">Not now</button><button id="alertSounds">Open Sounds</button></div>
+    </div>
+  </div>
+
+  <!-- Paywall -->
+  <div class="paywall" id="paywall">
+    <div class="pw-head">
+      <div class="t"><img class="pw-logo" alt="Freedom" src="data:image/png;base64,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"> Freedom Premium</div>
+      <button class="pw-x" id="pwClose">✕</button>
+    </div>
+    <div class="pw-card">
+      <h2>Get Adaptive Focus Music</h2>
+      <svg class="pw-badge-icon" viewBox="0 0 92 92" xmlns="http://www.w3.org/2000/svg">
+        <rect x="6" y="6" width="80" height="80" rx="18" fill="#2f5d2c"/>
+        <rect x="22" y="46" width="9" height="24" rx="4.5" fill="#9cc098"/>
+        <rect x="35" y="30" width="9" height="40" rx="4.5" fill="#F5C242"/>
+        <rect x="48" y="20" width="9" height="50" rx="4.5" fill="#9cc098"/>
+        <rect x="61" y="38" width="9" height="32" rx="4.5" fill="#F5C242"/>
+      </svg>
+      <div class="pw-lead">Stay locked in.</div>
+      <p class="pw-body">Personalized focus music that builds and eases as you work, so your attention stays on what you're doing and your focus never drifts. Generated just for you, to enhance the flow of your session.</p>
+    </div>
+    <div class="pw-dots"><i class="on"></i><i></i><i></i><i></i><i></i></div>
+    <div class="pw-press"><span class="wired">WIRED</span><span>WSJ</span><span>The New Yorker</span></div>
+    <div class="pw-pricing">
+      <div class="pw-plan sel">
+        <div class="pw-badge">Less than a cup of coffee!</div>
+        <div class="left"><div class="pw-rad"></div><div><div class="name">Yearly</div><div class="sub">Only $3.33 /mo · Auto-renews, cancel anytime</div></div></div>
+        <div class="price">$39.99</div>
+      </div>
+      <div class="pw-plan">
+        <div class="left"><div class="pw-rad"></div><div><div class="name">Forever</div><div class="sub">$199 once, yours forever</div></div></div>
+        <div class="price">$199</div>
+      </div>
+      <button class="pw-cta" id="pwCta">START FREE TRIAL</button>
+    </div>
+  </div>
+
+  <!-- Trial confirmation -->
+  <div class="confirm" id="confirm">
+    <div class="box">
+      <div class="big">🎉</div>
+      <h3>You're in!</h3>
+      <p>Congratulations — you've started your free trial of Freedom Premium!</p>
+      <button id="confirmOk">Start focusing</button>
+    </div>
+  </div>
+
+ </div>
+
+ <!-- Demo plumbing — NOT part of the product. -->
+ <details class="setup" id="setup">
+   <summary>⚙ Demo controls</summary>
+   <input id="url" type="text" placeholder="Mubert stream URL from get-link (optional — demo runs silent without it)">
+   <div class="h">Not part of the product. In Freedom the stream is fetched automatically via <code>get-link</code>. Open with <code>?stream=URL</code> to pre-load.</div>
+   <label><input type="checkbox" id="freeUser" checked> Simulate a free (non-Premium) user — toggling Adaptive Focus Music on fires the paywall. Uncheck to act as Premium.</label>
+   <label><input type="checkbox" id="demoFast" checked> Run the session in ~30s so the intensity arc is visible on stage (otherwise uses the selected length).</label>
+   <label><input type="checkbox" id="blockAll"> Simulate a "block all internet" session (to demo the offline fallback).</label>
+ </details>
+
+ <audio id="audio"></audio>
+
+<script>
+const $ = id => document.getElementById(id);
+const audio = $('audio');
+let creds=null, timer=null, elapsed=0, total=900, lastPhase=-1;
+let currentIntensity='low', currentPlaylist=null, sessionSec=900;
+
+const STYLES=[
+  {name:'Lo-fi',       desc:'mellow beats, easy to fade into',  idx:'1.0.0'},
+  {name:'Ambient',     desc:'soft pads, almost no rhythm',       idx:'2.0.0'},
+  {name:'Classical',   desc:'light instrumental, no vocals',     idx:'3.0.0'},
+  {name:'Electronic',  desc:'steady momentum for long stretches',idx:'4.0.0'},
+];
+let currentStyle=STYLES[0]; currentPlaylist=currentStyle.idx;
+
+const PLAN=[[0.15,'low','Settling in','calm on-ramp'],
+            [0.70,'medium','Deep focus','steady, unobtrusive bed'],
+            [0.92,'high','Final stretch','a subtle lift for the home stretch'],
+            [1.00,'low','Wind-down','easing off as the block ends']];
+const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
+
+// generic visual toggles
+document.querySelectorAll('[data-toggle]').forEach(t=>t.addEventListener('click',()=>t.classList.toggle('on')));
+
+// length chips
+document.querySelectorAll('.chip[data-sec]').forEach(c=>c.addEventListener('click',()=>{
+  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+  c.classList.add('on'); sessionSec=+c.dataset.sec;
+}));
+
+const isBlocked=()=>$('blockAll') && $('blockAll').checked;
+const isPremium=()=>!($('freeUser') && $('freeUser').checked);
+function showAlert(){$('alertBg').classList.add('on');}
+$('alertClose').addEventListener('click',()=>$('alertBg').classList.remove('on'));
+$('alertSounds').addEventListener('click',()=>$('alertBg').classList.remove('on'));
+
+function reflectRows(on){ $('soundPickRow').style.display=on?'':'none'; $('adaptiveCap').style.display=on?'':'none'; }
+function applyPremiumState(){ const free=!isPremium(); $('premiumPill').style.display=free?'':'none'; if(free){ $('adaptiveToggle').classList.remove('on'); reflectRows(false); } }
+$('freeUser').addEventListener('change',applyPremiumState);
+$('pwClose').addEventListener('click',()=>$('paywall').classList.remove('on'));
+$('pwCta').addEventListener('click',()=>{ $('paywall').classList.remove('on'); $('confirm').classList.add('on'); });
+$('confirmOk').addEventListener('click',()=>{ $('confirm').classList.remove('on'); $('freeUser').checked=false; $('premiumPill').style.display='none'; $('adaptiveToggle').classList.add('on'); reflectRows(true); });
+
+$('adaptiveToggle').addEventListener('click',()=>{
+  let on=$('adaptiveToggle').classList.contains('on');
+  if(on && !isPremium()){ $('adaptiveToggle').classList.remove('on'); $('paywall').classList.add('on'); return; }
+  if(on && isBlocked()){ $('adaptiveToggle').classList.remove('on'); on=false; showAlert(); }
+  reflectRows(on);
+});
+
+// Mubert wiring
+function parseUrl(u){try{const url=new URL(u.trim());return{url,customer_id:url.searchParams.get('customer_id'),access_token:url.searchParams.get('access_token')};}catch(e){return null;}}
+$('url').addEventListener('input',()=>creds=parseUrl($('url').value));
+function urlFor(i){const u=new URL(creds.url.toString());u.searchParams.set('intensity',i); if(currentPlaylist)u.searchParams.set('playlist',currentPlaylist); return u.toString();}
+
+// style picker
+function renderStyles(){
+  $('styleOpts').innerHTML=STYLES.map(s=>`<div class="opt ${s.name===currentStyle.name?'sel':''}" data-idx="${s.idx}"><div>${s.name}<div class="sub2">${s.desc}</div></div><span class="check">✓</span></div>`).join('');
+  $('styleOpts').querySelectorAll('.opt').forEach(o=>o.addEventListener('click',()=>selectStyle(o.dataset.idx)));
+}
+function openSheet(){renderStyles(); $('sheetBg').classList.add('on'); $('styleSheet').classList.add('on');}
+function closeSheet(){$('sheetBg').classList.remove('on'); $('styleSheet').classList.remove('on');}
+function selectStyle(idx){ currentStyle=STYLES.find(s=>s.idx===idx)||STYLES[0]; currentPlaylist=currentStyle.idx; $('styleVal').textContent=currentStyle.name; if(creds && !audio.paused){ audio.src=urlFor(currentIntensity); audio.play().catch(()=>{}); } closeSheet(); }
+$('soundPickRow').addEventListener('click',openSheet);
+$('sheetBg').addEventListener('click',closeSheet);
+
+async function setIntensity(i){ currentIntensity=i; if(!creds)return;
+  try{const r=await fetch('https://music-api.mubert.com/api/v3/public/streaming/set-intensity',{method:'POST',headers:{'Content-Type':'application/json','customer-id':creds.customer_id,'access-token':creds.access_token},body:JSON.stringify({intensity:i})}); if(!r.ok)throw 0;
+  }catch(e){ if(!audio.paused){audio.src=urlFor(i);audio.play().catch(()=>{});} }
+}
+
+function go(scr){document.querySelectorAll('.scr').forEach(s=>s.classList.remove('on')); $(scr).classList.add('on');}
+function start(){
+  if($('adaptiveToggle').classList.contains('on') && isBlocked()){ showAlert(); return; }
+  total = ($('demoFast') && $('demoFast').checked) ? 30 : sessionSec;
+  elapsed=0; lastPhase=-1;
+  $('time').textContent=fmt(total); $('ring').style.setProperty('--p',0); $('ph').style.left='0%';
+  $('chip').classList.remove('paused');
+  if(creds){audio.src=urlFor('low');audio.play().catch(()=>{});}
+  go('runScreen'); timer=setInterval(tick,1000); tick();
+}
+function stop(){ clearInterval(timer); timer=null; audio.pause(); $('chip').classList.add('paused'); go('editScreen'); }
+function tick(){
+  const frac=elapsed/total;
+  $('ring').style.setProperty('--p',Math.min(100,frac*100));
+  $('ph').style.left=Math.min(100,frac*100)+'%';
+  $('time').textContent=fmt(Math.max(0,total-elapsed));
+  let pi=PLAN.findIndex(p=>frac<p[0]); if(pi<0)pi=PLAN.length-1;
+  if(pi!==lastPhase){lastPhase=pi; const[,lvl,nm,feel]=PLAN[pi]; setIntensity(lvl); $('phaseName').textContent=nm; $('runCap').textContent='Adaptive Focus Music · '+feel;}
+  if(elapsed>=total){stop();return;}
+  elapsed++;
+}
+$('startBtn').addEventListener('click',start);
+$('endBtn').addEventListener('click',stop);
+$('backBtn').addEventListener('click',stop);
+
+(function(){const pre=new URLSearchParams(location.search).get('stream');
+  if(pre){$('url').value=pre;creds=parseUrl(pre);}
+  $('setup').open=false; applyPremiumState();})();
+</script>
+</body>
+</html>
