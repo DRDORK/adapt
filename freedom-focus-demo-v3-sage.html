@@ -362,7 +362,7 @@ const Engine=(()=>{
   let rainG=null, rainHiG=null, rainGustG=null, drumG=null, chimeG=null;
   let running=false, noteTimer=null, arpTimer=null, drumTimer=null, chimeTimer=null, chordTimer=null, droneNodes=[], fifthG=null, CH=null;
   let resolveBias=1, sounding=[], fadingOut=false, chordTones=null, chordIdx=0, phaseIx=0, arcPos=0, curStage='', curSet=null, hotStart=false;
-  let P={bright:.4, dens:.3, space:.8, lofi:.2};
+  let P={bright:.4, dens:.3, groove:.3, space:.8, lofi:.2};
 
   const ROOT=73.42; // fallback
   const R=()=>CH&&CH.root?CH.root:ROOT; // per-channel key
@@ -572,7 +572,7 @@ const Engine=(()=>{
     arpTimer=setInterval(()=>{
       if(!running)return;
       step++;
-      if(Math.random()>.2+.5*P.dens)return;
+      if(Math.random()>.2+.5*(P.groove!==undefined?P.groove:P.dens))return;
       const sc=scale();
       let semis=pick(sc);
       if(semis===0&&Math.random()>resolveBias)semis=pick(sc.filter(x=>x!==0));
@@ -724,7 +724,7 @@ const Engine=(()=>{
       if(rideOn&&s===0&&bar%4===0&&Math.random()<.5+.4*drive)drumHit('ride',level,when);
       if(fill&&Math.random()<.5)drumHit('kick',level*.45,when);
       // beat-aligned melodic plucks on 8th positions — most plucks now land on the grid
-      if(CH.beatPlucks&&s%2===0&&Math.random()<.16+.22*P.dens)spawnGridPluck(when);
+      if(CH.beatPlucks&&s%2===0&&Math.random()<.16+.22*(P.groove!==undefined?P.groove:P.dens))spawnGridPluck(when);
     },stepMs);
   }
   function chimeStrike(when,vel){
@@ -919,8 +919,13 @@ const Engine=(()=>{
     },
     setArc(i,phaseIdx){
       if(!CH)return;
-      P.bright=lerp(CH.brightLo,CH.brightHi,i);
-      P.dens=lerp(CH.densLo,CH.densHi,i);
+      // evidence-based peak (Orpella 2025; Woods 2019): pulse clarity takes the
+      // full climb; brightness and melodic density soft-knee above .8 so the
+      // peak reads as drive, not as spectral noise on tired attention
+      const soft=(x,k)=>x<.8?x:.8+(x-.8)*k;
+      P.bright=lerp(CH.brightLo,CH.brightHi,soft(i,.35));
+      P.dens=lerp(CH.densLo,CH.densHi,soft(i,.55));
+      P.groove=lerp(CH.densLo,CH.densHi,i);
       P.space=lerp(CH.spaceFar,CH.spaceNear,i); // inverse: close-in through the middle, open at the edges
       P.lofi=lerp(CH.lofiStart,CH.lofiPeak,i);  // follows the curve: cleaner at the edges, dustier at the peak
       phaseIx=phaseIdx; arcPos=i;
