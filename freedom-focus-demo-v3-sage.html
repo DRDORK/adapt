@@ -359,7 +359,7 @@ const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
 const Engine=(()=>{ 
   let ctx=null, master, filter, dryG, wetG, conv;
   let wowDelay, wowLFO, wowDepth, cleanG, satPre, satShaper, satTone, satG, lofiBus, hissG;
-  let rainG=null, rainHiG=null, rainGustG=null, drumG=null, chimeG=null;
+  let rainG=null, rainHiG=null, rainGustG=null, rainDeps=[], drumG=null, chimeG=null;
   let running=false, noteTimer=null, arpTimer=null, drumTimer=null, chimeTimer=null, chordTimer=null, droneNodes=[], droneOscs=[], fifthG=null, CH=null;
   let resolveBias=1, sounding=[], fadingOut=false, chordTones=null, chordIdx=0, phaseIx=0, arcPos=0, curStage='', curSet=null, hotStart=false, droneMoveUntil=0;
   let P={bright:.4, dens:.3, groove:.3, space:.8, lofi:.2};
@@ -437,14 +437,14 @@ const Engine=(()=>{
     rainG=ctx.createGain(); rainG.gain.value=0;
     const rs=ctx.createBufferSource(); rs.buffer=makeDarkNoise(12,560,.4); rs.loop=true;
     const rlfo=ctx.createOscillator(); rlfo.frequency.value=.05;
-    const rdep=ctx.createGain(); rdep.gain.value=.015;
+    const rdep=ctx.createGain(); rdep.gain.value=0; rdep._d=.015; rainDeps.push(rdep);
     rlfo.connect(rdep); rdep.connect(rainG.gain); rlfo.start();
     rs.connect(rainG); rainG.connect(dryG); rs.start();
     // 2. patter — the main rain body, breathing noticeably
     rainHiG=ctx.createGain(); rainHiG.gain.value=0;
     const rp=ctx.createBufferSource(); rp.buffer=makeDarkNoise(10,3200,.35); rp.loop=true;
     const plfo=ctx.createOscillator(); plfo.frequency.value=.13;
-    const pdep=ctx.createGain(); pdep.gain.value=.022;
+    const pdep=ctx.createGain(); pdep.gain.value=0; pdep._d=.022; rainDeps.push(pdep);
     plfo.connect(pdep); pdep.connect(rainHiG.gain); plfo.start();
     rp.connect(rainHiG); rainHiG.connect(dryG); rp.start();
     // 3. gusts — a band of rain whose spectral center slowly sweeps (wind shifting the downpour)
@@ -455,7 +455,7 @@ const Engine=(()=>{
     const sdep=ctx.createGain(); sdep.gain.value=1200;
     sweep.connect(sdep); sdep.connect(gbp.frequency); sweep.start();
     const glfo=ctx.createOscillator(); glfo.frequency.value=.11;
-    const gdep=ctx.createGain(); gdep.gain.value=.018;
+    const gdep=ctx.createGain(); gdep.gain.value=0; gdep._d=.018; rainDeps.push(gdep);
     glfo.connect(gdep); gdep.connect(rainGustG.gain); glfo.start();
     rg.connect(gbp); gbp.connect(rainGustG); rainGustG.connect(dryG); rg.start();
 
@@ -473,11 +473,7 @@ const Engine=(()=>{
   const scale=()=>P.bright<.70?SCALES.warm:SCALES.bright;
   function clashes(pc){const now=ctx.currentTime;
     sounding=sounding.filter(s=>s.until>now);
-    if(droneOscs.length){ // never sustain a semitone against wherever the bass actually is
-      const bp=((droneOscs[0].semi%12)+12)%12;
-      const dd=Math.abs(pc-bp)%12, di=Math.min(dd,12-dd);
-      if(di===1)return true;
-    }
+    if(droneNodes.length&&(pc===1||pc===11))return true; // never SUSTAIN a 2nd/maj7 against the drone
     return sounding.some(s=>{const d=Math.abs(s.pc-pc)%12,iv=Math.min(d,12-d);return iv===1||iv===6;});}
   let liveGains=[];
   function regGain(g,until){ const now=ctx.currentTime; liveGains=liveGains.filter(v=>v.until>now); liveGains.push({g,until}); }
@@ -659,7 +655,7 @@ const Engine=(()=>{
   function spawnGridPluck(when){
     const sc=scale();
     let semis=pick(sc);
-    if(chordTones&&Math.random()<.78)semis=pick(chordTones);
+    if(chordTones&&Math.random()<.6)semis=pick(chordTones);
     if(semis===0&&Math.random()>resolveBias)semis=pick(sc.filter(x=>x!==0));
     for(let i=0;i<8&&clashes(semis);i++)semis=pick(sc);
     if(clashes(semis))return;
@@ -832,17 +828,9 @@ const Engine=(()=>{
       if(ns>9)ns-=12; if(ns<-5)ns+=12;
       d.semi=ns;
       const f=R()*Math.pow(2,ns/12)*d.oct;
-      // duck-and-step: breathe the drone down, move the pitch while quiet,
-      // swell back. The ear hears a new note arrive, never a slide.
-      const gv=d.g.gain, glev=gv.value;
-      gv.cancelScheduledValues(t);
-      gv.setValueAtTime(glev,t);
-      gv.linearRampToValueAtTime(glev*.15,t+.25);
-      gv.linearRampToValueAtTime(glev,t+.85);
       d.o.frequency.cancelScheduledValues(t);
       d.o.frequency.setValueAtTime(d.o.frequency.value,t);
-      d.o.frequency.linearRampToValueAtTime(f,t+.32); // travels under the dip
-      droneMoveUntil=t+1;
+      d.o.frequency.exponentialRampToValueAtTime(f,t+1.4);
     });
   }
   function playChord(){
@@ -910,12 +898,15 @@ const Engine=(()=>{
     satTone.frequency.linearRampToValueAtTime(16000-l*12500,t+1);
     wowDepth.gain.linearRampToValueAtTime(l*.0012,t+1);
     hissG.gain.linearRampToValueAtTime(l<.4?0:Math.pow((l-.4)/.6,2)*.07,t+1);
-    if(fifthG&&t>droneMoveUntil)fifthG.gain.linearRampToValueAtTime(P.bright*.035*(CH.droneFifth!==undefined?CH.droneFifth:1)*(1+.8*driveAmt()),t+3);
+    if(fifthG)fifthG.gain.linearRampToValueAtTime(P.bright*.035*(CH.droneFifth!==undefined?CH.droneFifth:1)*(1+.8*driveAmt()),t+3);
     // bed (the static wash) starts near-zero and thickens with the arc;
     // the moving layers (patter + gusts) carry the early minutes
     if(rainG)rainG.gain.linearRampToValueAtTime(CH&&CH.rain?(.004+.034*P.dens):0,t+3);
     if(rainHiG)rainHiG.gain.linearRampToValueAtTime(CH&&CH.rain?(.035+.06*P.dens):0,t+3);
     if(rainGustG)rainGustG.gain.linearRampToValueAtTime(CH&&CH.rain?(.035+.025*P.dens):0,t+3);
+    // the breathing LFOs are additive into these gains; they must be gated per
+    // channel too, or the rain bleeds into everything (the wind-in-Lo-fi bug)
+    rainDeps.forEach(n=>n.gain.linearRampToValueAtTime(CH&&CH.rain?n._d:0,t+1));
   }
   return {
     async start(key,fadeSec,hot){
