@@ -998,20 +998,26 @@ function applyPremiumState(){ const free=!isPremium(); $('premiumPill').style.di
 $('freeUser').addEventListener('change',applyPremiumState);
 $('pwClose').addEventListener('click',()=>$('paywall').classList.remove('on'));
 $('pwCta').addEventListener('click',()=>{ $('paywall').classList.remove('on'); $('confirm').classList.add('on'); });
-$('confirmOk').addEventListener('click',()=>{ $('confirm').classList.remove('on'); $('freeUser').checked=false; $('premiumPill').style.display='none'; $('adaptiveToggle').classList.add('on'); reflectRows(true); });
+$('confirmOk').addEventListener('click',()=>{ $('confirm').classList.remove('on'); $('freeUser').checked=false; $('premiumPill').style.display='none'; sageSeen=true; $('adaptiveToggle').classList.add('on'); reflectRows(true); });
 
 $('adaptiveToggle').addEventListener('click',()=>{
   let on=$('adaptiveToggle').classList.contains('on');
-  if(on){ // first contact goes through the preview sheet, never straight to a paywall
-    $('adaptiveToggle').classList.remove('on');
-    openSage();
+  if(on){
+    // first contact goes through the preview sheet; once Premium and introduced,
+    // the toggle just toggles
+    if(!isPremium()||!sageSeen){
+      $('adaptiveToggle').classList.remove('on');
+      openSage();
+      return;
+    }
+    reflectRows(true);
     return;
   }
   reflectRows(false);
 });
 
 // ---- Sage preview sheet ----
-let previewing=false, previewTimer=null;
+let previewing=false, previewTimer=null, sageSeen=false;
 const SAGE_PLAY_LABEL='▶\u00a0 Hear 30 seconds';
 function renderSageChips(){
   $('sageChips').innerHTML=STYLES.map(s=>`<button class="chip ${s.key===currentStyle.key?'on':''}" data-key="${s.key}" style="padding:12px 6px;font-size:13.5px;text-align:center;white-space:nowrap;">${s.name.toUpperCase()}</button>`).join('');
@@ -1043,7 +1049,7 @@ $('sagePlay').addEventListener('click',()=>{
 $('sageBg').addEventListener('click',closeSage);
 $('sageUnlock').addEventListener('click',()=>{
   closeSage();
-  if(isPremium()){ $('adaptiveToggle').classList.add('on'); reflectRows(true); }
+  if(isPremium()){ sageSeen=true; $('adaptiveToggle').classList.add('on'); reflectRows(true); }
   else $('paywall').classList.add('on');
 });
 
