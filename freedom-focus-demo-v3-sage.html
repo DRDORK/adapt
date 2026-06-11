@@ -360,7 +360,7 @@ const Engine=(()=>{
   let ctx=null, master, filter, dryG, wetG, conv;
   let wowDelay, wowLFO, wowDepth, cleanG, satPre, satShaper, satTone, satG, lofiBus, hissG;
   let rainG=null, rainHiG=null, rainGustG=null, drumG=null, chimeG=null;
-  let running=false, noteTimer=null, arpTimer=null, drumTimer=null, chimeTimer=null, chordTimer=null, droneNodes=[], fifthG=null, CH=null;
+  let running=false, noteTimer=null, arpTimer=null, drumTimer=null, chimeTimer=null, chordTimer=null, droneNodes=[], droneOscs=[], fifthG=null, CH=null;
   let resolveBias=1, sounding=[], fadingOut=false, chordTones=null, chordIdx=0, phaseIx=0, arcPos=0, curStage='', curSet=null, hotStart=false;
   let P={bright:.4, dens:.3, groove:.3, space:.8, lofi:.2};
 
@@ -811,6 +811,28 @@ const Engine=(()=>{
       regGain(g,t+3.6);
     });
   }
+  function resolveDrone(pcs){
+    // drone voice-leading: if a drone note isn't a tone of the new chord,
+    // glide it to the nearest chord tone, up or down, so it resolves quickly
+    if(!ctx||!droneOscs.length||!pcs||!pcs.length)return;
+    const t=ctx.currentTime;
+    droneOscs.forEach(d=>{
+      const cur=((d.semi%12)+12)%12;
+      if(pcs.includes(cur))return;
+      let best=null;
+      pcs.forEach(pc=>{
+        const up=(pc-cur+12)%12, down=up-12;
+        [up,down].forEach(dl=>{ if(best===null||Math.abs(dl)<Math.abs(best))best=dl; });
+      });
+      let ns=d.semi+best;
+      if(ns>9)ns-=12; if(ns<-5)ns+=12; // keep it in register
+      d.semi=ns;
+      const f=R()*Math.pow(2,ns/12)*d.oct;
+      d.o.frequency.cancelScheduledValues(t);
+      d.o.frequency.setValueAtTime(d.o.frequency.value,t);
+      d.o.frequency.exponentialRampToValueAtTime(f,t+1.4);
+    });
+  }
   function playChord(){
     if(!CH.chords)return;
     const st=chordStage();
@@ -819,6 +841,7 @@ const Engine=(()=>{
     chordIdx++;
     if(chordIdx%curSet.length===0)curSet=pick(CHORD_POOLS[st]); // new progression each cycle
     chordTones=tones.map(x=>x%12);
+    resolveDrone(chordTones);
     const vel=(.6+.4*P.dens)*(phaseIx===2?1.25:1);
     const when=ctx.currentTime+.05;
     if(CH.chords==='harp')harpChord(tones,when,vel); else epChord(tones,when,vel);
@@ -844,19 +867,21 @@ const Engine=(()=>{
       lfo.connect(lg); lg.connect(g.gain);
       o.connect(lp); lp.connect(g); g.connect(filter);
       o.start(); lfo.start(); droneNodes.push(o,lfo,g);
+      droneOscs.push({o:o,semi:0,oct:.5});
     });
     const f5=ctx.createOscillator(); f5.type='triangle';
     f5.frequency.value=R()*Math.pow(2,7/12);
     fifthG=ctx.createGain(); fifthG.gain.value=0;
     f5.connect(fifthG); fifthG.connect(filter); f5.start();
     droneNodes.push(f5,fifthG);
+    droneOscs.push({o:f5,semi:7,oct:1});
   }
   function stopDrone(fade){
     const t=ctx.currentTime;
     droneNodes.forEach(n=>{
       if(n.gain){n.gain.cancelScheduledValues(t);n.gain.setValueAtTime(n.gain.value,t);n.gain.linearRampToValueAtTime(0,t+fade);}
     });
-    const old=droneNodes; droneNodes=[]; fifthG=null;
+    const old=droneNodes; droneNodes=[]; droneOscs=[]; fifthG=null;
     setTimeout(()=>old.forEach(n=>{try{n.stop?n.stop():n.disconnect();}catch(e){}}),fade*1000+200);
   }
   function applyParams(){
@@ -886,7 +911,9 @@ const Engine=(()=>{
       CH=CHANNELS[key]||CHANNELS.ambient;
       if(!ctx)buildGraph();
       await ctx.resume();
-      running=true; fadingOut=false; sounding=[];
+      running=true; fadingOut=false;
+      silenceVoices(.05); // sweep zombie voices: suspended envelopes from a previous
+      // preview resume on ctx.resume() and would ring in the OLD channel's key
       const t=ctx.currentTime,g=master.gain;
       g.cancelScheduledValues(t); g.setValueAtTime(.0001,t);
       g.linearRampToValueAtTime(CH.vol,t+fadeSec);
