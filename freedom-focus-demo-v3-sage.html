@@ -359,9 +359,9 @@ const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
 const Engine=(()=>{ 
   let ctx=null, master, filter, dryG, wetG, conv;
   let wowDelay, wowLFO, wowDepth, cleanG, satPre, satShaper, satTone, satG, lofiBus, hissG;
-  let rainG=null, rainHiG=null, rainGustG=null, rainDeps=[], drumG=null, chimeG=null;
+  let rainG=null, rainHiG=null, rainGustG=null, drumG=null, chimeG=null;
   let running=false, noteTimer=null, arpTimer=null, drumTimer=null, chimeTimer=null, chordTimer=null, droneNodes=[], droneOscs=[], fifthG=null, CH=null;
-  let resolveBias=1, sounding=[], fadingOut=false, chordTones=null, chordIdx=0, phaseIx=0, arcPos=0, curStage='', curSet=null, hotStart=false, droneMoveUntil=0;
+  let resolveBias=1, sounding=[], fadingOut=false, chordTones=null, chordIdx=0, phaseIx=0, arcPos=0, curStage='', curSet=null, hotStart=false;
   let P={bright:.4, dens:.3, groove:.3, space:.8, lofi:.2};
 
   const ROOT=73.42; // fallback
@@ -437,14 +437,14 @@ const Engine=(()=>{
     rainG=ctx.createGain(); rainG.gain.value=0;
     const rs=ctx.createBufferSource(); rs.buffer=makeDarkNoise(12,560,.4); rs.loop=true;
     const rlfo=ctx.createOscillator(); rlfo.frequency.value=.05;
-    const rdep=ctx.createGain(); rdep.gain.value=0; rdep._d=.015; rainDeps.push(rdep);
+    const rdep=ctx.createGain(); rdep.gain.value=.015;
     rlfo.connect(rdep); rdep.connect(rainG.gain); rlfo.start();
     rs.connect(rainG); rainG.connect(dryG); rs.start();
     // 2. patter — the main rain body, breathing noticeably
     rainHiG=ctx.createGain(); rainHiG.gain.value=0;
     const rp=ctx.createBufferSource(); rp.buffer=makeDarkNoise(10,3200,.35); rp.loop=true;
     const plfo=ctx.createOscillator(); plfo.frequency.value=.13;
-    const pdep=ctx.createGain(); pdep.gain.value=0; pdep._d=.022; rainDeps.push(pdep);
+    const pdep=ctx.createGain(); pdep.gain.value=.022;
     plfo.connect(pdep); pdep.connect(rainHiG.gain); plfo.start();
     rp.connect(rainHiG); rainHiG.connect(dryG); rp.start();
     // 3. gusts — a band of rain whose spectral center slowly sweeps (wind shifting the downpour)
@@ -455,7 +455,7 @@ const Engine=(()=>{
     const sdep=ctx.createGain(); sdep.gain.value=1200;
     sweep.connect(sdep); sdep.connect(gbp.frequency); sweep.start();
     const glfo=ctx.createOscillator(); glfo.frequency.value=.11;
-    const gdep=ctx.createGain(); gdep.gain.value=0; gdep._d=.018; rainDeps.push(gdep);
+    const gdep=ctx.createGain(); gdep.gain.value=.018;
     glfo.connect(gdep); gdep.connect(rainGustG.gain); glfo.start();
     rg.connect(gbp); gbp.connect(rainGustG); rainGustG.connect(dryG); rg.start();
 
@@ -811,21 +811,21 @@ const Engine=(()=>{
       regGain(g,t+3.6);
     });
   }
-  function resolveDrone(tones){
-    // drone voice-leading, bass-style: the low drone follows chord ROOTS only
-    // (a 3rd or 7th in the bass reads as dissonance, e.g. the leading tone),
-    // and the fifth voice stacks a fifth above the root. Nearest direction wins.
-    if(!ctx||!droneOscs.length||!tones||!tones.length)return;
-    const root=((tones[0]%12)+12)%12;
-    const fifth=(root+7)%12;
+  function resolveDrone(pcs){
+    // drone voice-leading: if a drone note isn't a tone of the new chord,
+    // glide it to the nearest chord tone, up or down, so it resolves quickly
+    if(!ctx||!droneOscs.length||!pcs||!pcs.length)return;
     const t=ctx.currentTime;
     droneOscs.forEach(d=>{
-      const target=d.oct===.5?root:fifth;
       const cur=((d.semi%12)+12)%12;
-      if(cur===target)return;
-      const up=(target-cur+12)%12, down=up-12;
-      let ns=d.semi+(Math.abs(down)<up?down:up);
-      if(ns>9)ns-=12; if(ns<-5)ns+=12;
+      if(pcs.includes(cur))return;
+      let best=null;
+      pcs.forEach(pc=>{
+        const up=(pc-cur+12)%12, down=up-12;
+        [up,down].forEach(dl=>{ if(best===null||Math.abs(dl)<Math.abs(best))best=dl; });
+      });
+      let ns=d.semi+best;
+      if(ns>9)ns-=12; if(ns<-5)ns+=12; // keep it in register
       d.semi=ns;
       const f=R()*Math.pow(2,ns/12)*d.oct;
       d.o.frequency.cancelScheduledValues(t);
@@ -867,14 +867,14 @@ const Engine=(()=>{
       lfo.connect(lg); lg.connect(g.gain);
       o.connect(lp); lp.connect(g); g.connect(filter);
       o.start(); lfo.start(); droneNodes.push(o,lfo,g);
-      droneOscs.push({o:o,g:g,semi:0,oct:.5});
+      droneOscs.push({o:o,semi:0,oct:.5});
     });
     const f5=ctx.createOscillator(); f5.type='triangle';
     f5.frequency.value=R()*Math.pow(2,7/12);
     fifthG=ctx.createGain(); fifthG.gain.value=0;
     f5.connect(fifthG); fifthG.connect(filter); f5.start();
     droneNodes.push(f5,fifthG);
-    droneOscs.push({o:f5,g:fifthG,semi:7,oct:1});
+    droneOscs.push({o:f5,semi:7,oct:1});
   }
   function stopDrone(fade){
     const t=ctx.currentTime;
@@ -904,9 +904,6 @@ const Engine=(()=>{
     if(rainG)rainG.gain.linearRampToValueAtTime(CH&&CH.rain?(.004+.034*P.dens):0,t+3);
     if(rainHiG)rainHiG.gain.linearRampToValueAtTime(CH&&CH.rain?(.035+.06*P.dens):0,t+3);
     if(rainGustG)rainGustG.gain.linearRampToValueAtTime(CH&&CH.rain?(.035+.025*P.dens):0,t+3);
-    // the breathing LFOs are additive into these gains; they must be gated per
-    // channel too, or the rain bleeds into everything (the wind-in-Lo-fi bug)
-    rainDeps.forEach(n=>n.gain.linearRampToValueAtTime(CH&&CH.rain?n._d:0,t+1));
   }
   return {
     async start(key,fadeSec,hot){
