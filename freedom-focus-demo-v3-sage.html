@@ -473,7 +473,11 @@ const Engine=(()=>{
   const scale=()=>P.bright<.70?SCALES.warm:SCALES.bright;
   function clashes(pc){const now=ctx.currentTime;
     sounding=sounding.filter(s=>s.until>now);
-    if(droneNodes.length&&(pc===1||pc===11))return true; // never SUSTAIN a 2nd/maj7 against the drone
+    if(droneOscs.length){ // never sustain a semitone against wherever the bass actually is
+      const bp=((droneOscs[0].semi%12)+12)%12;
+      const dd=Math.abs(pc-bp)%12, di=Math.min(dd,12-dd);
+      if(di===1)return true;
+    }
     return sounding.some(s=>{const d=Math.abs(s.pc-pc)%12,iv=Math.min(d,12-d);return iv===1||iv===6;});}
   let liveGains=[];
   function regGain(g,until){ const now=ctx.currentTime; liveGains=liveGains.filter(v=>v.until>now); liveGains.push({g,until}); }
@@ -655,7 +659,7 @@ const Engine=(()=>{
   function spawnGridPluck(when){
     const sc=scale();
     let semis=pick(sc);
-    if(chordTones&&Math.random()<.6)semis=pick(chordTones);
+    if(chordTones&&Math.random()<.78)semis=pick(chordTones);
     if(semis===0&&Math.random()>resolveBias)semis=pick(sc.filter(x=>x!==0));
     for(let i=0;i<8&&clashes(semis);i++)semis=pick(sc);
     if(clashes(semis))return;
@@ -811,26 +815,26 @@ const Engine=(()=>{
       regGain(g,t+3.6);
     });
   }
-  function resolveDrone(pcs){
-    // drone voice-leading: if a drone note isn't a tone of the new chord,
-    // glide it to the nearest chord tone, up or down, so it resolves quickly
-    if(!ctx||!droneOscs.length||!pcs||!pcs.length)return;
+  function resolveDrone(tones){
+    // drone voice-leading, bass-style: the low drone follows chord ROOTS only
+    // (a 3rd or 7th in the bass reads as dissonance, e.g. the leading tone),
+    // and the fifth voice stacks a fifth above the root. Nearest direction wins.
+    if(!ctx||!droneOscs.length||!tones||!tones.length)return;
+    const root=((tones[0]%12)+12)%12;
+    const fifth=(root+7)%12;
     const t=ctx.currentTime;
     droneOscs.forEach(d=>{
+      const target=d.oct===.5?root:fifth;
       const cur=((d.semi%12)+12)%12;
-      if(pcs.includes(cur))return;
-      let best=null;
-      pcs.forEach(pc=>{
-        const up=(pc-cur+12)%12, down=up-12;
-        [up,down].forEach(dl=>{ if(best===null||Math.abs(dl)<Math.abs(best))best=dl; });
-      });
-      let ns=d.semi+best;
-      if(ns>9)ns-=12; if(ns<-5)ns+=12; // keep it in register
+      if(cur===target)return;
+      const up=(target-cur+12)%12, down=up-12;
+      let ns=d.semi+(Math.abs(down)<up?down:up);
+      if(ns>9)ns-=12; if(ns<-5)ns+=12;
       d.semi=ns;
       const f=R()*Math.pow(2,ns/12)*d.oct;
       d.o.frequency.cancelScheduledValues(t);
       d.o.frequency.setValueAtTime(d.o.frequency.value,t);
-      d.o.frequency.exponentialRampToValueAtTime(f,t+1.4);
+      d.o.frequency.exponentialRampToValueAtTime(f,t+0.5); // quick resolve: minimal time spent between pitches
     });
   }
   function playChord(){
