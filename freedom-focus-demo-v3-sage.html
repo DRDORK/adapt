@@ -471,10 +471,15 @@ const Engine=(()=>{
   }
 
   const scale=()=>P.bright<.70?SCALES.warm:SCALES.bright;
-  function clashes(pc){const now=ctx.currentTime;
+  function clashes(pc,isLong){const now=ctx.currentTime;
     sounding=sounding.filter(s=>s.until>now);
     if(droneNodes.length&&(pc===1||pc===11))return true; // never SUSTAIN a 2nd/maj7 against the drone
-    return sounding.some(s=>{const d=Math.abs(s.pc-pc)%12,iv=Math.min(d,12-d);return iv===1||iv===6;});}
+    return sounding.some(s=>{
+      const d=Math.abs(s.pc-pc)%12,iv=Math.min(d,12-d);
+      if(iv===1||iv===6)return true;
+      if(iv===2&&isLong&&s.long)return true; // sustained voices may not co-sustain at a 2nd
+      return false;
+    });}
   let liveGains=[];
   function regGain(g,until){ const now=ctx.currentTime; liveGains=liveGains.filter(v=>v.until>now); liveGains.push({g,until}); }
   function silenceVoices(fade){
@@ -550,15 +555,17 @@ const Engine=(()=>{
     if(chordTones&&Math.random()<.55)semis=pick(chordTones); // lean into the current chord
     if(semis===0&&Math.random()>resolveBias)semis=pick(sc.filter(x=>x!==0));
     else if(resolveBias>1&&Math.random()<.35)semis=0;
-    for(let i=0;i<8&&clashes(semis);i++)semis=pick(sc);
-    if(clashes(semis))return;
+    const r=Math.random(),[wPad,wBell]=CH.mix,dv=driveAmt();
+    const voice=r<wPad-.10*dv?'pad':(r<wPad+wBell?'bell':'pluck'); // at full drive, bells take a slice of the pad share
+    const isLong=voice!=='pluck'; // pads and bells sustain; plucks don't
+    for(let i=0;i<8&&clashes(semis,isLong);i++)semis=pick(sc);
+    if(clashes(semis,isLong))return;
     const freq=R()*Math.pow(2,oct+semis/12);
-    const r=Math.random(),[wPad,wBell]=CH.mix,d=driveAmt();
     let dur;
-    if(r<wPad-.10*d)dur=spawnPad(freq,oct,now);          // at full drive, bells take a slice of the pad share
-    else if(r<wPad+wBell)dur=spawnBell(freq*2,now);
+    if(voice==='pad')dur=spawnPad(freq,oct,now);
+    else if(voice==='bell')dur=spawnBell(freq*2,now);
     else dur=spawnPluck(freq*2,now);
-    sounding.push({pc:semis,until:now+dur*.8});
+    sounding.push({pc:semis,until:now+dur*.8,long:isLong});
   }
   function noteLoop(){
     if(!running)return;
