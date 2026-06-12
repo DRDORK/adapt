@@ -162,9 +162,9 @@
     <div class="ch"><div class="nm">Night Rain · A&#9837; major</div><div class="d">Rain with real weather in it: layers that gust and recede, soft plucks, and distant windchimes that ring when a breeze passes.</div></div>
   </div>
 
-  <h2>Why on-device wins</h2>
+  <h2>Everything is generated on-device</h2>
   <div class="vals">
-    <div class="val"><div class="dot"></div><div><b>It plays through a full block.</b> Freedom's whole point is turning the internet off. A streaming music service dies the moment you block everything. This music is generated on the device, so it keeps playing through a block-everything session, on a plane, anywhere. It can't be interrupted by the very thing it's there to support.</div></div>
+    <div class="val"><div class="dot"></div><div><b>It plays through a full block.</b> This music is generated on the device, so it keeps playing through a block-everything session, on a plane, anywhere. It can't be interrupted by the very thing it's there to support.</div></div>
     <div class="val"><div class="dot"></div><div><b>Zero marginal cost.</b> No per-minute licensing, no streaming infrastructure, no usage quotas, no metering. The economics of a streaming partner forced this to be a premium-only feature. On-device generation makes the packaging a product decision instead of a cost constraint.</div></div>
     <div class="val"><div class="dot"></div><div><b>Completely private.</b> No audio or usage data leaves the device. Nothing to buffer, nothing to track, no cellular data used.</div></div>
     <div class="val"><div class="dot"></div><div><b>We own every note.</b> No third-party licensing, no royalty questions, no sub-licensing tiers, no dependency on a vendor's roadmap. The musical rules are Freedom intellectual property, written in-house.</div></div>
@@ -177,7 +177,7 @@
     <h2>From demo to instrument</h2>
 
     <h3>THE NATIVE PORT: ONE CORE, EVERY PLATFORM</h3>
-    <p>This demo runs on the Web Audio API, which ships in every browser and every iOS/Android webview today. Everything hard about this feature, the arc scheduler, the chord engine, the consonance rules, the arrangement logic, is platform-independent math. The plan is to keep it that way: a portable composition core with thin native audio shells per platform. <b>On iOS that shell is AVAudioEngine,</b> which is the first target because it solves the thing a webview can't promise: music that keeps generating with the screen locked and the phone in a pocket for a 3-hour session. <b>On Android it's Oboe/AAudio</b> (or a shared C++ core that covers both). And <b>the web dashboard is the shortest path of all: this demo already IS the web build, running on the same Web Audio API</b> the dashboard would use. The Mac and Windows apps follow from the same core in time. Write the instrument once; every platform plays it.</p>
+    <p>Everything hard about this feature, the arc scheduler, the chord engine, the consonance rules, is platform-independent math: a portable composition core with thin native audio shells per platform. <b>On iOS that shell is AVAudioEngine,</b> the first target because it keeps the music generating with the screen locked. <b>On Android it's Oboe/AAudio</b>. And <b>the web dashboard is the shortest path of all: this demo already IS the web build, running on the same Web Audio API</b>. Mac and Windows follow from the same core in time. Write the instrument once; every platform plays it.</p>
 
     <h3>REAL INSTRUMENTS: THE SAMPLER</h3>
     <p>Native audio brings real sampler instruments: audio files mapped across the keyboard with velocity layers and envelopes (AVAudioUnitSampler on iOS, equivalent libraries elsewhere). <b>Freedom owns thousands of hours of original stems from real recordings.</b> A curated set of those, a piano sampled across its register, bowed strings, real percussion, turns this from a synth engine into an instrument that plays our own recordings, generatively recomposed, never repeating. No other focus product can have that sound, because no one else has the source material.</p>
